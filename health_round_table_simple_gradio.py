@@ -1,10 +1,21 @@
 import gradio as gr
 import requests
+import os
 
 API_KEY = "939d10536ea749c2ac9f1ae783335eaa.L8GP6pNpV7FVESvej9RAoDTT"
 BASE_URL = "https://ollama.com"
 
 headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+
+# Avatar image paths (relative to static folder)
+AVATARS = {
+    "synthesizer": "avatars/avatar_synthesizer.jpg",
+    "dr_heart": "avatars/avatar_dr_heart.jpg",
+    "nutri": "avatars/avatar_nutri.jpg",
+    "longevity": "avatars/avatar_longevity.jpg",
+    "holistics": "avatars/avatar_holistics.jpg",
+    "medi_suppi": "avatars/avatar_medi_suppi.jpg"
+}
 
 def chat(model, system, user_message):
     payload = {"model": model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user_message}], "stream": False}
@@ -60,39 +71,21 @@ IMPORTANT: Give exactly 3 clear numbered recommendations (1. 2. 3.) that integra
     except Exception as e:
         synthesizer_response = f"Error: {str(e)}"
 
-    # Medi/Suppi - Drug/Supplement Interaction Checker
+    # Medi/Suppi
     medi_response = ""
     if supplements and supplements.strip():
-        medi_system = """You are Medi/Suppi, a pharmacology and supplement safety specialist. Your role is to flag drug and supplement interactions, age-related risks, and potential harms based on what a person is taking.
-
-IMPORTANT: You are NOT a replacement for medical advice. You are an educational safety checker only.
-
-Always include this disclaimer at the end of your response: "Always consult your doctor or pharmacist before making changes to your supplement or medication routine."
-
-Give your response in clear sections:
-1. CONCERNS - Flag any potentially dangerous interactions or risks
-2. WATCH LIST - Things to monitor
-3. GENERAL GUIDANCE - Basic safety tips
-"""
-        medi_prompt = f"""Review the following supplements and medications for safety concerns. Consider interactions, age-related risks, and duplicate effects.
-
-SUPPLEMENTS/MEDICATIONS TO CHECK:
-{supplements}
-
-CASE CONTEXT:
-{case}
-
-GOALS: {goals}
-CONSTRAINTS: {constraints}
-"""
+        medi_system = """You are Medi/Suppi, a pharmacology and supplement safety specialist. Flag drug and supplement interactions, age-related risks, and potential harms.
+IMPORTANT: Not medical advice - educational safety checker only.
+Always include: "Always consult your doctor or pharmacist before making changes."
+Give: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE"""
+        medi_prompt = f"""Check for safety concerns:\nSUPPLEMENTS/MEDICATIONS:\n{supplements}\n\nCASE: {case}\nGOALS: {goals}\nCONSTRAINTS: {constraints}"""
         try:
             medi_response = chat(model_choice, medi_system, medi_prompt)
         except Exception as e:
-            medi_response = f"Error checking supplements: {str(e)}"
+            medi_response = f"Error: {str(e)}"
     else:
-        medi_response = "No supplements or medications listed. To use the interaction checker, enter what you're taking in the Supplements + Medications box above."
+        medi_response = "No supplements listed. Enter what you're taking above to get interaction warnings."
 
-    # Return all outputs
     return "", synthesizer_response, dr_heart_response, nutri_response, longevity_response, holistics_response, medi_response
 
 def build_ui():
@@ -116,23 +109,28 @@ def build_ui():
         clear_btn = gr.Button("Clear")
         loading_status = gr.HTML("<div style='padding:10px;color:#f97316;font-weight:bold;'>Processing... 6 agents are thinking (1-3 minutes)...</div>", visible=True)
 
-        # Accordion sections
+        # Agent sections with avatars
         with gr.Accordion("TLDR - Key Recommendations", open=True):
             tldr_output = gr.Markdown("*Run a case to see recommendations*")
 
-        with gr.Accordion("Dr. Heart (Cardiology)", open=False):
+        with gr.Accordion("Dr. Heart (Cardiology) ❤️", open=False):
+            gr.HTML(f"<img src='/static/avatars/avatar_dr_heart.jpg' width='60' style='border-radius:50%;vertical-align:middle;'> Dr. Heart")
             dr_heart_output = gr.Markdown("*Waiting for Dr. Heart...*")
 
-        with gr.Accordion("Nutri (Functional Nutrition)", open=False):
+        with gr.Accordion("Nutri (Functional Nutrition) 🍔", open=False):
+            gr.HTML(f"<img src='/static/avatars/avatar_nutri.jpg' width='60' style='border-radius:50%;vertical-align:middle;'> Nutri")
             nutri_output = gr.Markdown("*Waiting for Nutri...*")
 
-        with gr.Accordion("Longevity (Anti-Aging Research)", open=False):
+        with gr.Accordion("Longevity (Anti-Aging Research) ⏳", open=False):
+            gr.HTML(f"<img src='/static/avatars/avatar_longevity.jpg' width='60' style='border-radius:50%;vertical-align:middle;'> Longevity")
             longevity_output = gr.Markdown("*Waiting for Longevity...*")
 
-        with gr.Accordion("Holistics (Integrative Medicine)", open=False):
+        with gr.Accordion("Holistics (Integrative Medicine) 🌿", open=False):
+            gr.HTML(f"<img src='/static/avatars/avatar_holistics.jpg' width='60' style='border-radius:50%;vertical-align:middle;'> Holistics")
             holistics_output = gr.Markdown("*Waiting for Holistics...*")
 
-        with gr.Accordion("Medi/Suppi (Drug + Supplement Safety)", open=False):
+        with gr.Accordion("Medi/Suppi (Drug + Supplement Safety) 💊", open=False):
+            gr.HTML(f"<img src='/static/avatars/avatar_medi_suppi.jpg' width='60' style='border-radius:50%;vertical-align:middle;'> Medi/Suppi")
             medi_output = gr.Markdown("*Waiting for Medi/Suppi...*")
 
         gr.Markdown("*Each specialist reads all previous analyses. Medi/Suppi checks your supplements for interactions.*")
