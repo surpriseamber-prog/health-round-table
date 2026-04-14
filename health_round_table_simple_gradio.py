@@ -1,5 +1,6 @@
 import gradio as gr
 import requests
+import os
 import uuid
 
 API_KEY = "939d10536ea749c2ac9f1ae783335eaa.L8GP6pNpV7FVESvej9RAoDTT"
@@ -145,5 +146,7 @@ def build_ui():
     return demo
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 7861))
+    print(f"Starting Health Round Table on port {port}...")
     demo = build_ui()
-    demo.launch(server_name="0.0.0.0", server_port=7861)
+    demo.launch(server_name="0.0.0.0", server_port=port)
