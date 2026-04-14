@@ -71,7 +71,7 @@ Always include this disclaimer at the end of your response: "Always consult your
 
 Give your response in clear sections:
 1. CONCERNS - Flag any potentially dangerous interactions or risks
-2. WATCH LIST - Things to monitor 
+2. WATCH LIST - Things to monitor
 3. GENERAL GUIDANCE - Basic safety tips
 """
         medi_prompt = f"""Review the following supplements and medications for safety concerns. Consider interactions, age-related risks, and duplicate effects.
@@ -92,8 +92,8 @@ CONSTRAINTS: {constraints}
     else:
         medi_response = "No supplements or medications listed. To use the interaction checker, enter what you're taking in the Supplements + Medications box above."
 
-    # Return all outputs for accordion components
-    return synthesizer_response, dr_heart_response, nutri_response, longevity_response, holistics_response, medi_response
+    # Return all outputs
+    return "", synthesizer_response, dr_heart_response, nutri_response, longevity_response, holistics_response, medi_response
 
 def build_ui():
     with gr.Blocks(title="Health Round Table") as demo:
@@ -114,8 +114,9 @@ def build_ui():
 
         start_btn = gr.Button("Start Round Table", variant="primary")
         clear_btn = gr.Button("Clear")
+        loading_status = gr.HTML("<div style='padding:10px;color:#f97316;font-weight:bold;'>Processing... 6 agents are thinking (1-3 minutes)...</div>", visible=True)
 
-        # Accordion sections (collapsed by default)
+        # Accordion sections
         with gr.Accordion("TLDR - Key Recommendations", open=True):
             tldr_output = gr.Markdown("*Run a case to see recommendations*")
 
@@ -134,26 +135,18 @@ def build_ui():
         with gr.Accordion("Medi/Suppi (Drug + Supplement Safety)", open=False):
             medi_output = gr.Markdown("*Waiting for Medi/Suppi...*")
 
-        gr.Markdown("*Each specialist reads all previous analyses. The Medi/Suppi agent checks your supplements for interactions.*")
+        gr.Markdown("*Each specialist reads all previous analyses. Medi/Suppi checks your supplements for interactions.*")
 
         def clear_all():
             return [None, None, None, None, None, None, None, None, None, None, None, None, None]
 
-        def update_tldr(synth):
-            return gr.update(value=synth)
-
         start_btn.click(
             fn=run_round_table,
             inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input],
-            outputs=[tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output]
-        )
-        start_btn.click(
-            fn=lambda synth: gr.update(value=synth, visible=True),
-            inputs=[tldr_output] if False else [tldr_output],
-            outputs=[tldr_output]
+            outputs=[loading_status, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output]
         )
 
-        clear_btn.click(fn=clear_all, inputs=[], outputs=[case_input, goals_input, constraints_input, model_choice, supplements_input, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output])
+        clear_btn.click(fn=clear_all, inputs=[], outputs=[case_input, goals_input, constraints_input, model_choice, supplements_input, loading_status, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output])
 
     return demo
 
