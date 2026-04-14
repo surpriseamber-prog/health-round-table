@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: health-round-table
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python health_round_table_simple_gradio.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.10"
+      - key: PORT
+        value: "7861"
