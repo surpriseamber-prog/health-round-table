@@ -5,6 +5,7 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python health_round_table_simple_gradio.py
+    healthCheckPath: /
     envVars:
       - key: PYTHON_VERSION
         value: "3.10"
