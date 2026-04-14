@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python health_round_table_simple_gradio.py
+    startCommand: python health_round_table_chat.py
     healthCheckPath: /
     envVars:
       - key: PYTHON_VERSION
