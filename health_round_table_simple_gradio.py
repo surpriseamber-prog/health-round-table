@@ -13,7 +13,7 @@ def chat(model, system, user_message):
         raise Exception(f"Error {response.status_code}: {response.text}")
     return response.json()["message"]["content"]
 
-def run_round_table(case, goals, constraints, model_choice):
+def run_round_table(case, goals, constraints, model_choice, supplements):
     context = ""
     if goals:
         context += f"\n\nPATIENT GOALS:\n{goals}"
@@ -60,8 +60,40 @@ IMPORTANT: Give exactly 3 clear numbered recommendations (1. 2. 3.) that integra
     except Exception as e:
         synthesizer_response = f"Error: {str(e)}"
 
-    # Return individual responses for Accordion components
-    return synthesizer_response, dr_heart_response, nutri_response, longevity_response, holistics_response
+    # Medi/Suppi - Drug/Supplement Interaction Checker
+    medi_response = ""
+    if supplements and supplements.strip():
+        medi_system = """You are Medi/Suppi, a pharmacology and supplement safety specialist. Your role is to flag drug and supplement interactions, age-related risks, and potential harms based on what a person is taking.
+
+IMPORTANT: You are NOT a replacement for medical advice. You are an educational safety checker only.
+
+Always include this disclaimer at the end of your response: "Always consult your doctor or pharmacist before making changes to your supplement or medication routine."
+
+Give your response in clear sections:
+1. CONCERNS - Flag any potentially dangerous interactions or risks
+2. WATCH LIST - Things to monitor 
+3. GENERAL GUIDANCE - Basic safety tips
+"""
+        medi_prompt = f"""Review the following supplements and medications for safety concerns. Consider interactions, age-related risks, and duplicate effects.
+
+SUPPLEMENTS/MEDICATIONS TO CHECK:
+{supplements}
+
+CASE CONTEXT:
+{case}
+
+GOALS: {goals}
+CONSTRAINTS: {constraints}
+"""
+        try:
+            medi_response = chat(model_choice, medi_system, medi_prompt)
+        except Exception as e:
+            medi_response = f"Error checking supplements: {str(e)}"
+    else:
+        medi_response = "No supplements or medications listed. To use the interaction checker, enter what you're taking in the Supplements + Medications box above."
+
+    # Return all outputs for accordion components
+    return synthesizer_response, dr_heart_response, nutri_response, longevity_response, holistics_response, medi_response
 
 def build_ui():
     with gr.Blocks(title="Health Round Table") as demo:
@@ -69,7 +101,7 @@ def build_ui():
 
         with gr.Row():
             with gr.Column(scale=3):
-                case_input = gr.Textbox(label="Patient Case", placeholder="42yo male, BP 145/95, fatigue...", lines=5)
+                case_input = gr.Textbox(label="Patient Case", placeholder="42yo female, swollen feet, weight 180lbs...", lines=5)
             with gr.Column(scale=1):
                 goals_input = gr.Textbox(label="Goals", placeholder="Lower BP, more energy...", lines=2)
                 constraints_input = gr.Textbox(label="Constraints", placeholder="No pharma, vegetarian...", lines=2)
@@ -78,16 +110,14 @@ def build_ui():
                     value="mistral-large-3:675b",
                     label="Model"
                 )
+                supplements_input = gr.Textbox(label="Supplements + Medications", placeholder="List vitamins, supplements, Rx meds...", lines=2)
 
         start_btn = gr.Button("Start Round Table", variant="primary")
         clear_btn = gr.Button("Clear")
 
-        # TLDR box at top
-        tldr_output = gr.Textbox(label="TLDR - Top 3 Recommendations", lines=6, interactive=False, visible=False)
-
-        # Accordion sections for each agent (collapsed by default)
-        with gr.Accordion("TLDR - Key Recommendations", open=True) as tldr_accordion:
-            tldr_output_internal = gr.Markdown("Run a case to see recommendations here.")
+        # Accordion sections (collapsed by default)
+        with gr.Accordion("TLDR - Key Recommendations", open=True):
+            tldr_output = gr.Markdown("*Run a case to see recommendations*")
 
         with gr.Accordion("Dr. Heart (Cardiology)", open=False):
             dr_heart_output = gr.Markdown("*Waiting for Dr. Heart...*")
@@ -101,36 +131,29 @@ def build_ui():
         with gr.Accordion("Holistics (Integrative Medicine)", open=False):
             holistics_output = gr.Markdown("*Waiting for Holistics...*")
 
-        with gr.Accordion("Synthesizer (Consensus)", open=False):
-            synthesizer_output = gr.Markdown("*Waiting for Synthesizer...*")
+        with gr.Accordion("Medi/Suppi (Drug + Supplement Safety)", open=False):
+            medi_output = gr.Markdown("*Waiting for Medi/Suppi...*")
 
-        gr.Markdown("*Each specialist reads all previous analyses before responding. Click headers above to expand/collapse.*")
+        gr.Markdown("*Each specialist reads all previous analyses. The Medi/Suppi agent checks your supplements for interactions.*")
 
         def clear_all():
-            return [None, None, None, None, None, None, None, None, None, None, None]
+            return [None, None, None, None, None, None, None, None, None, None, None, None, None]
 
-        def update_outputs(synth, dr, nutri, long, hol):
-            return [
-                gr.update(visible=True, value=synth),
-                gr.update(visible=True, value=synth),
-                gr.update(value=dr),
-                gr.update(value=nutri),
-                gr.update(value=long),
-                gr.update(value=hol)
-            ]
+        def update_tldr(synth):
+            return gr.update(value=synth)
 
         start_btn.click(
             fn=run_round_table,
-            inputs=[case_input, goals_input, constraints_input, model_choice],
-            outputs=[synthesizer_output, dr_heart_output, nutri_output, longevity_output, holistics_output]
+            inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input],
+            outputs=[tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output]
         )
-        start_btn.click(fn=lambda: gr.update(visible=True), outputs=[tldr_output])
+        start_btn.click(
+            fn=lambda synth: gr.update(value=synth, visible=True),
+            inputs=[tldr_output] if False else [tldr_output],
+            outputs=[tldr_output]
+        )
 
-        clear_btn.click(
-            fn=clear_all,
-            inputs=[],
-            outputs=[case_input, goals_input, constraints_input, model_choice, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, synthesizer_output]
-        )
+        clear_btn.click(fn=clear_all, inputs=[], outputs=[case_input, goals_input, constraints_input, model_choice, supplements_input, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output])
 
     return demo
 
