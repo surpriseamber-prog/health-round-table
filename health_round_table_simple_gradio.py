@@ -1,7 +1,5 @@
 import gradio as gr
 import requests
-import os
-import uuid
 
 API_KEY = "939d10536ea749c2ac9f1ae783335eaa.L8GP6pNpV7FVESvej9RAoDTT"
 BASE_URL = "https://ollama.com"
@@ -24,7 +22,7 @@ def run_round_table(case, goals, constraints, model_choice):
 
     # Dr. Heart
     dr_heart_system = f"""You are Dr. Heart, a board-certified cardiologist. Focus on BP, cholesterol, circulation.{context}
-IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses focused and readable."""
+IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses focused."""
     try:
         dr_heart_response = chat(model_choice, dr_heart_system, f"Analyze: {case}")
     except Exception as e:
@@ -32,7 +30,7 @@ IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses 
 
     # Nutri
     nutri_system = f"""You are Nutri, a functional medicine nutritionist. Build on Dr. Heart's foundation.{context}
-IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses focused and readable."""
+IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses focused."""
     try:
         nutri_response = chat(model_choice, nutri_system, f"React to Dr. Heart and add nutrition perspective:\n=== DR. HEART ===\n{dr_heart_response}\n=== END ===\nCase: {case}")
     except Exception as e:
@@ -40,7 +38,7 @@ IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses 
 
     # Longevity
     longevity_system = f"""You are Longevity, a longevity researcher. Add anti-aging perspective.{context}
-IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses focused and readable."""
+IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses focused."""
     try:
         longevity_response = chat(model_choice, longevity_system, f"Build on Dr. Heart and Nutri:\n=== DR. HEART ===\n{dr_heart_response}\n=== NUTRI ===\n{nutri_response}\n=== END ===\nCase: {case}")
     except Exception as e:
@@ -48,7 +46,7 @@ IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses 
 
     # Holistics
     holistics_system = f"""You are Holistics, an integrative medicine practitioner. Add holistic and mind-body perspective.{context}
-IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses focused and readable."""
+IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses focused."""
     try:
         holistics_response = chat(model_choice, holistics_system, f"Build on all previous:\n=== DR. HEART ===\n{dr_heart_response}\n=== NUTRI ===\n{nutri_response}\n=== LONGEVITY ===\n{longevity_response}\n=== END ===\nCase: {case}")
     except Exception as e:
@@ -56,49 +54,14 @@ IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses 
 
     # Synthesizer
     synthesizer_system = f"""You are the Synthesizer, a medical professor. Create consensus recommendations.{context}
-IMPORTANT: Give exactly 3 clear numbered recommendations (1. 2. 3.) that integrate all specialist input. Start with the 3 recommendations as a TLDR, then explain briefly."""
+IMPORTANT: Give exactly 3 clear numbered recommendations (1. 2. 3.) that integrate all specialist input."""
     try:
         synthesizer_response = chat(model_choice, synthesizer_system, f"Create consensus:\n=== DR. HEART ===\n{dr_heart_response}\n=== NUTRI ===\n{nutri_response}\n=== LONGEVITY ===\n{longevity_response}\n=== HOLISTICS ===\n{holistics_response}\n=== END ===")
     except Exception as e:
         synthesizer_response = f"Error: {str(e)}"
 
-    # Build output with TLDR first, then collapsible agent sections
-    debate_id = str(uuid.uuid4())[:8]
-    share_url = f"https://health-round-table.onrender.com/?debate={debate_id}"
-
-    output = f"""## TLDR — Key Recommendations
-
-{synthesizer_response}
-
----
-
-## Dr. Heart (Cardiology)
-{dr_heart_response}
-
----
-
-## Nutri (Functional Nutrition)
-{nutri_response}
-
----
-
-## Longevity (Anti-Aging Research)
-{longevity_response}
-
----
-
-## Holistics (Integrative Medicine)
-{holistics_response}
-
----
-
-**Debate ID:** `{debate_id}` | **Share this debate:** Copy the link above
-
----
-*Not medical advice - for educational debate only.*
-"""
-
-    return output, share_url
+    # Return individual responses for Accordion components
+    return synthesizer_response, dr_heart_response, nutri_response, longevity_response, holistics_response
 
 def build_ui():
     with gr.Blocks(title="Health Round Table") as demo:
@@ -119,33 +82,60 @@ def build_ui():
         start_btn = gr.Button("Start Round Table", variant="primary")
         clear_btn = gr.Button("Clear")
 
-        # TLDR + Results output
-        output_md = gr.Markdown(label="Discussion Results", visible=False)
-        share_box = gr.Textbox(label="Share this debate - copy link below", interactive=False, visible=False, lines=1)
+        # TLDR box at top
+        tldr_output = gr.Textbox(label="TLDR - Top 3 Recommendations", lines=6, interactive=False, visible=False)
+
+        # Accordion sections for each agent (collapsed by default)
+        with gr.Accordion("TLDR - Key Recommendations", open=True) as tldr_accordion:
+            tldr_output_internal = gr.Markdown("Run a case to see recommendations here.")
+
+        with gr.Accordion("Dr. Heart (Cardiology)", open=False):
+            dr_heart_output = gr.Markdown("*Waiting for Dr. Heart...*")
+
+        with gr.Accordion("Nutri (Functional Nutrition)", open=False):
+            nutri_output = gr.Markdown("*Waiting for Nutri...*")
+
+        with gr.Accordion("Longevity (Anti-Aging Research)", open=False):
+            longevity_output = gr.Markdown("*Waiting for Longevity...*")
+
+        with gr.Accordion("Holistics (Integrative Medicine)", open=False):
+            holistics_output = gr.Markdown("*Waiting for Holistics...*")
+
+        with gr.Accordion("Synthesizer (Consensus)", open=False):
+            synthesizer_output = gr.Markdown("*Waiting for Synthesizer...*")
+
+        gr.Markdown("*Each specialist reads all previous analyses before responding. Click headers above to expand/collapse.*")
 
         def clear_all():
-            return None, None, None, None, "", "", "", ""
+            return [None, None, None, None, None, None, None, None, None, None, None]
 
-        start_btn.click(fn=lambda: gr.update(visible=True), outputs=[output_md])
+        def update_outputs(synth, dr, nutri, long, hol):
+            return [
+                gr.update(visible=True, value=synth),
+                gr.update(visible=True, value=synth),
+                gr.update(value=dr),
+                gr.update(value=nutri),
+                gr.update(value=long),
+                gr.update(value=hol)
+            ]
+
         start_btn.click(
             fn=run_round_table,
             inputs=[case_input, goals_input, constraints_input, model_choice],
-            outputs=[output_md, share_box]
+            outputs=[synthesizer_output, dr_heart_output, nutri_output, longevity_output, holistics_output]
         )
-        start_btn.click(fn=lambda: gr.update(visible=True), outputs=[share_box])
+        start_btn.click(fn=lambda: gr.update(visible=True), outputs=[tldr_output])
 
         clear_btn.click(
             fn=clear_all,
             inputs=[],
-            outputs=[case_input, goals_input, constraints_input, model_choice, output_md, share_box]
+            outputs=[case_input, goals_input, constraints_input, model_choice, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, synthesizer_output]
         )
-        clear_btn.click(fn=lambda: (gr.update(visible=False), gr.update(visible=False)), outputs=[output_md, share_box])
-
-        gr.Markdown("*Each specialist reads all previous analyses before responding. Click the headers above to expand/collapse each agent's full response.*")
 
     return demo
 
 if __name__ == "__main__":
+    import os
     port = int(os.environ.get("PORT", 7861))
     print(f"Starting Health Round Table on port {port}...")
     demo = build_ui()
