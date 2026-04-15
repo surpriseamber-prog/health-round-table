@@ -103,8 +103,7 @@ def run_round_table(case, goals, constraints, model_choice, supplements):
     results = {"synthesizer": sy, "dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "medi_suppi": me}
     did = save_debate(case, goals, constraints, model_choice, supplements, results)
     share_url = f"https://health-round-table.onrender.com/?id={did}"
-    share_link = f"**Saved!** [Open shared debate]({share_url}) | ID: `{did}`"
-    return share_link, results["synthesizer"], results["dr_heart"], results["nutri"], results["longevity"], results["holistics"], results["medi_suppi"], did
+    return results, did, share_url
 
 # --- UI ---
 with gr.Blocks(title="Health Round Table") as demo:
@@ -166,54 +165,58 @@ with gr.Blocks(title="Health Round Table") as demo:
         load_btn = gr.Button("Load")
     debate_case_info = gr.Markdown("*Paste an ID and click Load to view a saved debate*")
 
-    # ---- Event handlers ----
-    # Outputs: loading_status, share_output, tldr_output, dr_heart, nutri, longevity, holistics, medi, feed_display
+    # ---- Output component lists ----
+    # For start_btn: [loading, share, tldr, dr_heart, nutri, longevity, holistics, medi, feed]
     start_outputs = [loading_status, share_output, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output, feed_display]
+    # For load_btn: [debate_case_info, tldr, dr_heart, nutri, longevity, holistics, medi, feed]
+    load_outputs = [debate_case_info, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output, feed_display]
+    # For clear_btn: [case, goals, constraints, supplements, model, loading, share, tldr, dr_heart, nutri, longevity, holistics, medi, feed]
+    clear_outputs = [case_input, goals_input, constraints_input, supplements_input, model_choice, loading_status, share_output, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output, feed_display]
 
     def on_start(case, goals, constraints, model, supplements):
-        yield [True, False, "*Processing...*", "*Processing...*", "*Processing...*", "*Processing...*", "*Processing...*", "*Processing...*", ""]
+        # Step 1: show loading
+        yield [True, False, "", "", "", "", "", "", ""]
+        # Step 2: run and show results
         try:
-            results = run_round_table(case, goals, constraints, model, supplements)
+            results, did, share_url = run_round_table(case, goals, constraints, model, supplements)
+            share_link = f"**✅ Saved!** [Open this debate]({share_url}) | ID: `{did}`"
             yield [
-                False,          # hide loading
-                results[0],      # share link (markdown)
-                results[1],      # synthesizer
-                results[2],      # dr_heart
-                results[3],      # nutri
-                results[4],      # longevity
-                results[5],      # holistics
-                results[6],      # medi
-                build_feed(),     # update feed
+                False,                          # hide loading
+                share_link,                     # share_output (Markdown)
+                results["synthesizer"],         # tldr_output
+                results["dr_heart"],            # dr_heart_output
+                results["nutri"],               # nutri_output
+                results["longevity"],           # longevity_output
+                results["holistics"],           # holistics_output
+                results["medi_suppi"],          # medi_output
+                build_feed(),                    # feed_display
             ]
         except Exception as e:
             yield [
                 False,
-                f"**Error:** {str(e)}",
-                "Error running Synthesizer",
-                "Error running Dr. Heart",
-                "Error running Nutri",
-                "Error running Longevity",
-                "Error running Holistics",
-                "Error running Medi/Suppi",
+                f"**Error:** {str(e)[:200]}",
+                "Error",
+                "Error",
+                "Error",
+                "Error",
+                "Error",
+                "Error",
                 build_feed(),
             ]
 
     def on_clear():
-        return ["", "", "", "", "", "", "", "", "", build_feed()]
+        return ["", "", "", "", "", False, False, "*Run a case to see recommendations*", "*Waiting for Dr. Heart...*", "*Waiting for Nutri...*", "*Waiting for Longevity...*", "*Waiting for Holistics...*", "*Waiting for Medi/Suppi...*", build_feed()]
 
-    start_btn.click(fn=on_start, inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input], outputs=start_outputs)
-    clear_btn.click(fn=on_clear, inputs=[], outputs=[case_input, goals_input, constraints_input, supplements_input, loading_status, share_output, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output, feed_display])
-
-    # Load handler
     def on_load(debate_id):
         d = get_debate(debate_id.strip())
         if not d:
-            return ["⚠️ Debate not found. It may have been cleared after Render sleep.", "", "", "", "", "", "", "*Run a new case*"]
+            return ["⚠️ Debate not found. It may have been cleared after Render sleep.", "", "", "", "", "", "", build_feed()]
         r = d["results"]
         info = f"**Case:** {d['case']}\n**Goals:** {d['goals']}\n**Constraints:** {d['constraints']}\n**Ran:** {d['timestamp']} | **Views:** {d['views']}"
         return [info, r["synthesizer"], r["dr_heart"], r["nutri"], r["longevity"], r["holistics"], r["medi_suppi"], ""]
 
-    load_outputs = [debate_case_info, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output, feed_display]
+    start_btn.click(fn=on_start, inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input], outputs=start_outputs)
+    clear_btn.click(fn=on_clear, inputs=[], outputs=clear_outputs)
     load_btn.click(fn=on_load, inputs=[debate_id_input], outputs=load_outputs)
 
 if __name__ == "__main__":
