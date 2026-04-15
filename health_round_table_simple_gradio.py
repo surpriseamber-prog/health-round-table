@@ -7,7 +7,7 @@ BASE_URL = "https://ollama.com"
 
 headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 
-# Avatar image paths (relative to static folder)
+# Avatar image paths (served from static folder)
 AVATARS = {
     "synthesizer": "avatars/avatar_synthesizer.jpg",
     "dr_heart": "avatars/avatar_dr_heart.jpg",
@@ -16,6 +16,15 @@ AVATARS = {
     "holistics": "avatars/avatar_holistics.jpg",
     "medi_suppi": "avatars/avatar_medi_suppi.jpg"
 }
+
+def avatar_html(key, label, emoji):
+    """Build an HTML snippet with avatar image + agent label."""
+    path = AVATARS[key]
+    return f'''<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+    <img src="/static/{path}" width="48" height="48" style="border-radius:50%;object-fit:cover;">
+    <span style="font-size:1.1em;font-weight:600;">{label}</span>
+    <span style="font-size:1.2em;">{emoji}</span>
+</div>'''
 
 def chat(model, system, user_message):
     payload = {"model": model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user_message}], "stream": False}
@@ -88,9 +97,12 @@ Give: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE"""
 
     return "", synthesizer_response, dr_heart_response, nutri_response, longevity_response, holistics_response, medi_response
 
+def clear_all():
+    return [None, None, None, None, None, None, None, None, None, None, None, None, None]
+
 def build_ui():
     with gr.Blocks(title="Health Round Table") as demo:
-        gr.Markdown("# Health Round Table\n*Not medical advice - for educational debate only*")
+        gr.Markdown("# Health Round Table\n*Not medical advice — for educational debate only*")
 
         with gr.Row():
             with gr.Column(scale=3):
@@ -105,38 +117,45 @@ def build_ui():
                 )
                 supplements_input = gr.Textbox(label="Supplements + Medications", placeholder="List vitamins, supplements, Rx meds...", lines=2)
 
-        start_btn = gr.Button("Start Round Table", variant="primary")
-        clear_btn = gr.Button("Clear")
-        loading_status = gr.HTML("<div style='padding:10px;color:#f97316;font-weight:bold;'>Processing... 6 agents are thinking (1-3 minutes)...</div>", visible=True)
+        with gr.Row():
+            start_btn = gr.Button("Start Round Table", variant="primary")
+            clear_btn = gr.Button("Clear")
 
-        # Agent sections with avatars
-        with gr.Accordion("TLDR - Key Recommendations", open=True):
+        loading_status = gr.HTML(
+            "<div style='padding:10px;color:#f97316;font-weight:bold;'>Processing... 6 agents are thinking (1-3 minutes)...</div>",
+            visible=True
+        )
+
+        # TLDR Summary
+        with gr.Accordion("💡 TLDR — Key Recommendations", open=True):
             tldr_output = gr.Markdown("*Run a case to see recommendations*")
 
-        with gr.Accordion("Dr. Heart (Cardiology) ❤️", open=False):
-            gr.HTML(f"<img src='/static/avatars/avatar_dr_heart.jpg' width='60' style='border-radius:50%;vertical-align:middle;'> Dr. Heart")
+        # Dr. Heart
+        with gr.Accordion("Dr. Heart (Cardiology)", open=False):
+            gr.HTML(avatar_html("dr_heart", "Dr. Heart", "❤️"))
             dr_heart_output = gr.Markdown("*Waiting for Dr. Heart...*")
 
-        with gr.Accordion("Nutri (Functional Nutrition) 🍔", open=False):
-            gr.HTML(f"<img src='/static/avatars/avatar_nutri.jpg' width='60' style='border-radius:50%;vertical-align:middle;'> Nutri")
+        # Nutri
+        with gr.Accordion("Nutri (Functional Nutrition)", open=False):
+            gr.HTML(avatar_html("nutri", "Nutri", "🍔"))
             nutri_output = gr.Markdown("*Waiting for Nutri...*")
 
-        with gr.Accordion("Longevity (Anti-Aging Research) ⏳", open=False):
-            gr.HTML(f"<img src='/static/avatars/avatar_longevity.jpg' width='60' style='border-radius:50%;vertical-align:middle;'> Longevity")
+        # Longevity
+        with gr.Accordion("Longevity (Anti-Aging Research)", open=False):
+            gr.HTML(avatar_html("longevity", "Longevity", "⏳"))
             longevity_output = gr.Markdown("*Waiting for Longevity...*")
 
-        with gr.Accordion("Holistics (Integrative Medicine) 🌿", open=False):
-            gr.HTML(f"<img src='/static/avatars/avatar_holistics.jpg' width='60' style='border-radius:50%;vertical-align:middle;'> Holistics")
+        # Holistics
+        with gr.Accordion("Holistics (Integrative Medicine)", open=False):
+            gr.HTML(avatar_html("holistics", "Holistics", "🌿"))
             holistics_output = gr.Markdown("*Waiting for Holistics...*")
 
-        with gr.Accordion("Medi/Suppi (Drug + Supplement Safety) 💊", open=False):
-            gr.HTML(f"<img src='/static/avatars/avatar_medi_suppi.jpg' width='60' style='border-radius:50%;vertical-align:middle;'> Medi/Suppi")
+        # Medi/Suppi
+        with gr.Accordion("Medi/Suppi (Drug + Supplement Safety)", open=False):
+            gr.HTML(avatar_html("medi_suppi", "Medi/Suppi", "💊"))
             medi_output = gr.Markdown("*Waiting for Medi/Suppi...*")
 
         gr.Markdown("*Each specialist reads all previous analyses. Medi/Suppi checks your supplements for interactions.*")
-
-        def clear_all():
-            return [None, None, None, None, None, None, None, None, None, None, None, None, None]
 
         start_btn.click(
             fn=run_round_table,

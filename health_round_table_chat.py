@@ -157,10 +157,9 @@ def build_ui():
 
                 with gr.Column(scale=3):
                     gr.ChatInterface(
-                        fn=lambda msg, hist, agent_name=agent_selector.value, model=model_choice_chat.value, ctx=case_context.value: chat_with_agent(agent_name, msg, hist, model, ctx),
+                        fn=lambda msg, hist, agent_name, model, ctx: chat_with_agent(agent_name, msg, hist, model, ctx),
                         additional_inputs=[agent_selector, model_choice_chat, case_context],
-                        title="Chat with Agent",
-                        avatar_images=None
+                        title="Chat with Agent"
                     )
 
         with gr.Tab("Round Table"):

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Round Table</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; color: #e0e0e0; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header { text-align: center; padding: 30px 0; }
+        h1 { font-size: 2.5em; background: linear-gradient(90deg, #00d9ff, #00ff88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 10px; }
+        .subtitle { color: #888; font-size: 1.1em; }
+        
+        .input-section { background: rgba(255,255,255,0.05); border-radius: 16px; padding: 25px; margin-bottom: 30px; border: 1px solid rgba(255,255,255,0.1); }
+        .input-group { margin-bottom: 20px; }
+        .input-group label { display: block; margin-bottom: 8px; color: #aaa; font-weight: 500; }
+        .case-input, .goals-input, .constraints-input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 15px; color: #fff; font-size: 1em; font-family: inherit; resize: vertical; }
+        .case-input { min-height: 200px; }
+        .goals-input, .constraints-input { min-height: 80px; }
+        .case-input:focus, .goals-input:focus, .constraints-input:focus { outline: none; border-color: #00d9ff; box-shadow: 0 0 20px rgba(0,217,255,0.2); }
+        
+        .constraints-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
+        .constraint-checkbox { display: flex; align-items: center; gap: 8px; padding: 10px 15px; background: rgba(0,0,0,0.2); border-radius: 8px; cursor: pointer; }
+        .constraint-checkbox:hover { background: rgba(0,0,0,0.4); }
+        .constraint-checkbox input { width: 18px; height: 18px; accent-color: #00d9ff; }
+        .constraint-checkbox span { font-size: 0.95em; }
+        
+        .controls { display: flex; gap: 15px; margin-top: 20px; flex-wrap: wrap; align-items: center; }
+        .model-select { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 12px 20px; color: #fff; font-size: 0.95em; cursor: pointer; }
+        .run-btn { background: linear-gradient(90deg, #00d9ff, #00ff88); border: none; border-radius: 8px; padding: 12px 40px; color: #1a1a2e; font-size: 1em; font-weight: bold; cursor: pointer; }
+        .run-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 25px rgba(0,217,255,0.4); }
+        .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .status-bar { display: none; background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.3); border-radius: 12px; padding: 20px; margin-bottom: 25px; text-align: center; }
+        .status-bar.active { display: block; }
+        .status-label { font-size: 1.2em; color: #00d9ff; margin-bottom: 10px; }
+        .status-sublabel { font-size: 0.9em; color: #888; }
+        
+        .results-section { display: none; }
+        .results-section.active { display: block; }
+        .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .results-title { font-size: 1.5em; color: #00d9ff; }
+        .clear-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 10px 20px; color: #fff; cursor: pointer; }
+        .clear-btn:hover { background: rgba(255,255,255,0.2); }
+        
+        .specialist-card { background: rgba(255,255,255,0.05); border-radius: 16px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; }
+        .specialist-header { padding: 20px 25px; display: flex; align-items: center; gap: 15px; cursor: pointer; }
+        .specialist-header:hover { background: rgba(255,255,255,0.05); }
+        .specialist-icon { width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5em; }
+        .dr-heart .specialist-icon { background: linear-gradient(135deg, #ff6b6b, #ee5a5a); }
+        .nutri .specialist-icon { background: linear-gradient(135deg, #feca57, #ff9f43); }
+        .longevity .specialist-icon { background: linear-gradient(135deg, #54a0ff, #2e86de); }
+        .holistics .specialist-icon { background: linear-gradient(135deg, #5f27cd, #a55eea); }
+        .synthesizer .specialist-icon { background: linear-gradient(135deg, #00d9ff, #00ff88); }
+        
+        .specialist-info { flex: 1; }
+        .specialist-name { font-size: 1.3em; font-weight: bold; }
+        .specialist-role { font-size: 0.9em; color: #888; }
+        .specialist-status { font-size: 0.85em; color: #00d9ff; margin-top: 5px; }
+        
+        .toggle-icon { font-size: 1.5em; color: #666; transition: transform 0.3s; }
+        .specialist-card.collapsed .toggle-icon { transform: rotate(-90deg); }
+        
+        .specialist-content { padding: 0 25px 25px 25px; line-height: 1.7; white-space: pre-wrap; word-wrap: break-word; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 20px; }
+        .specialist-card.collapsed .specialist-content { display: none; }
+        
+        footer { text-align: center; padding: 40px 0; color: #555; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Health Round Table</h1>
+            <p class="subtitle">Watch AI Specialists Collaborate on Your Health Case</p>
+        </header>
+        
+        <div class="input-section">
+            <div class="input-group">
+                <label>Patient Case</label>
+                <textarea class="case-input" id="caseInput" placeholder="Enter patient case here..."></textarea>
+            </div>
+            
+            <div class="input-group">
+                <label>Goals (What does the patient want to achieve?)</label>
+                <textarea class="goals-input" id="goalsInput" placeholder="Example: Lower blood pressure naturally, more energy, reduce depression without heavy medication"></textarea>
+            </div>
+            
+            <div class="input-group">
+                <label>Constraints (What limitations apply?)</label>
+                <textarea class="constraints-input" id="constraintsInput" placeholder="Example: No pharmaceutical medications, vegetarian diet, budget limited"></textarea>
+            </div>
+            
+            <div class="input-group">
+                <label>Quick Constraints</label>
+                <div class="constraints-grid">
+                    <label class="constraint-checkbox"><input type="checkbox" id="noPharma"><span>No Pharmaceuticals</span></label>
+                    <label class="constraint-checkbox"><input type="checkbox" id="naturalOnly"><span>Natural/Herbal Only</span></label>
+                    <label class="constraint-checkbox"><input type="checkbox" id="budgetLimit"><span>Budget Limited</span></label>
+                    <label class="constraint-checkbox"><input type="checkbox" id="noHighIntensity"><span>No High-Intensity Exercise</span></label>
+                    <label class="constraint-checkbox"><input type="checkbox" id="vegetarian"><span>Vegetarian</span></label>
+                    <label class="constraint-checkbox"><input type="checkbox" id="vegan"><span>Vegan</span></label>
+                    <label class="constraint-checkbox"><input type="checkbox" id="glutenFree"><span>Gluten-Free</span></label>
+                    <label class="constraint-checkbox"><input type="checkbox" id="dairyFree"><span>Dairy-Free</span></label>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <select class="model-select" id="modelSelect">
+                    <option value="mistral-large-3:675b">Mistral Large</option>
+                    <option value="gpt-oss:20b">GPT-OSS 20B</option>
+                    <option value="qwen3-vl:235b-instruct">Qwen3 Vision</option>
+                    <option value="deepseek-v3.2">DeepSeek V3</option>
+                    <option value="gemma3:27b">Gemma 3</option>
+                </select>
+                <button class="run-btn" id="runBtn" onclick="runRoundTable()">Run Health Round Table</button>
+            </div>
+        </div>
+        
+        <div class="status-bar" id="statusBar">
+            <div class="status-label" id="statusLabel">Starting...</div>
+            <div class="status-sublabel" id="statusSublabel">Preparing analysis</div>
+        </div>
+        
+        <div class="results-section" id="results">
+            <div class="results-header">
+                <h2 class="results-title">Round Table Results</h2>
+                <button class="clear-btn" onclick="clearResults()">Clear</button>
+            </div>
+            
+            <div class="specialist-card" id="card-drHeart">
+                <div class="specialist-header" onclick="toggleCard('drHeart')">
+                    <div class="specialist-icon">❤️</div>
+                    <div class="specialist-info">
+                        <div class="specialist-name">Dr. Heart</div>
+                        <div class="specialist-role">Cardiologist</div>
+                        <div class="specialist-status" id="status-drHeart">Waiting...</div>
+                    </div>
+                    <div class="toggle-icon">▼</div>
+                </div>
+                <div class="specialist-content" id="content-drHeart"></div>
+            </div>
+            
+            <div class="specialist-card collapsed" id="card-nutri">
+                <div class="specialist-header" onclick="toggleCard('nutri')">
+                    <div class="specialist-icon">🍔</div>
+                    <div class="specialist-info">
+                        <div class="specialist-name">Nutri</div>
+                        <div class="specialist-role">Functional Medicine Nutritionist</div>
+                        <div class="specialist-status" id="status-nutri">Waiting...</div>
+                    </div>
+                    <div class="toggle-icon">▼</div>
+                </div>
+                <div class="specialist-content" id="content-nutri"></div>
+            </div>
+            
+            <div class="specialist-card collapsed" id="card-longevity">
+                <div class="specialist-header" onclick="toggleCard('longevity')">
+                    <div class="specialist-icon">⌛</div>
+                    <div class="specialist-info">
+                        <div class="specialist-name">Longevity</div>
+                        <div class="specialist-role">Anti-Aging Researcher</div>
+                        <div class="specialist-status" id="status-longevity">Waiting...</div>
+                    </div>
+                    <div class="toggle-icon">▼</div>
+                </div>
+                <div class="specialist-content" id="content-longevity"></div>
+            </div>
+            
+            <div class="specialist-card collapsed" id="card-holistics">
+                <div class="specialist-header" onclick="toggleCard('holistics')">
+                    <div class="specialist-icon">🌿</div>
+                    <div class="specialist-info">
+                        <div class="specialist-name">Holistics</div>
+                        <div class="specialist-role">Integrative Medicine Practitioner</div>
+                        <div class="specialist-status" id="status-holistics">Waiting...</div>
+                    </div>
+                    <div class="toggle-icon">▼</div>
+                </div>
+                <div class="specialist-content" id="content-holistics"></div>
+            </div>
+            
+            <div class="specialist-card collapsed" id="card-synthesizer">
+                <div class="specialist-header" onclick="toggleCard('synthesizer')">
+                    <div class="specialist-icon">🤝</div>
+                    <div class="specialist-info">
+                        <div class="specialist-name">Synthesizer</div>
+                        <div class="specialist-role">Medical Professor & Moderator</div>
+                        <div class="specialist-status" id="status-synthesizer">Waiting...</div>
+                    </div>
+                    <div class="toggle-icon">▼</div>
+                </div>
+                <div class="specialist-content" id="content-synthesizer"></div>
+            </div>
+        </div>
+        
+        <footer>Health Round Table — Powered by Ollama Cloud</footer>
+    </div>
+    
+    <script>
+        function toggleCard(id) {
+            document.getElementById('card-' + id).classList.toggle('collapsed');
+        }
+        
+        function clearResults() {
+            document.getElementById('results').classList.remove('active');
+            document.getElementById('statusBar').classList.remove('active');
+            document.getElementById('caseInput').value = '';
+            document.getElementById('goalsInput').value = '';
+            document.getElementById('constraintsInput').value = '';
+            document.querySelectorAll('.constraint-checkbox input').forEach(cb => cb.checked = false);
+            ['drHeart', 'nutri', 'longevity', 'holistics', 'synthesizer'].forEach(id => {
+                document.getElementById('content-' + id).textContent = '';
+                document.getElementById('status-' + id).textContent = 'Waiting...';
+                document.getElementById('status-' + id).style.color = '#888';
+            });
+            document.getElementById('card-nutri').classList.add('collapsed');
+            document.getElementById('card-longevity').classList.add('collapsed');
+            document.getElementById('card-holistics').classList.add('collapsed');
+            document.getElementById('card-synthesizer').classList.add('collapsed');
+        }
+        
+        function buildConstraintsText() {
+            let parts = [];
+            const manual = document.getElementById('constraintsInput').value.trim();
+            if (manual) parts.push(manual);
+            const checkboxes = [
+                { id: 'noPharma', label: 'NO PHARMACEUTICAL MEDICATIONS - must use natural approaches only' },
+                { id: 'naturalOnly', label: 'PREFER NATURAL/HERBAL APPROACHES' },
+                { id: 'budgetLimit', label: 'BUDGET LIMITED - prioritize cost-effective recommendations' },
+                { id: 'noHighIntensity', label: 'CANNOT do high-intensity exercise (consider low-impact alternatives)' },
+                { id: 'vegetarian', label: 'VEGETARIAN diet' },
+                { id: 'vegan', label: 'VEGAN diet' },
+                { id: 'glutenFree', label: 'GLUTEN-FREE diet' },
+                { id: 'dairyFree', label: 'DAIRY-FREE diet' }
+            ];
+            checkboxes.forEach(cb => {
+                if (document.getElementById(cb.id).checked) parts.push(cb.label);
+            });
+            return parts.join('\n');
+        }
+        
+        function setStatus(label, sublabel) {
+            document.getElementById('statusLabel').textContent = label;
+            document.getElementById('statusSublabel').textContent = sublabel;
+        }
+        
+        async function runRoundTable() {
+            const caseInput = document.getElementById('caseInput').value.trim();
+            const goals = document.getElementById('goalsInput').value.trim();
+            const constraints = buildConstraintsText();
+            const model = document.getElementById('modelSelect').value;
+            
+            if (!caseInput) {
+                alert('Please enter a patient case');
+                return;
+            }
+            
+            const runBtn = document.getElementById('runBtn');
+            const statusBar = document.getElementById('statusBar');
+            const results = document.getElementById('results');
+            
+            runBtn.disabled = true;
+            statusBar.classList.add('active');
+            results.classList.add('active');
+            
+            // Reset
+            ['drHeart', 'nutri', 'longevity', 'holistics', 'synthesizer'].forEach((id, i) => {
+                document.getElementById('content-' + id).textContent = '';
+                document.getElementById('status-' + id).textContent = 'Waiting...';
+                document.getElementById('status-' + id).style.color = '#888';
+            });
+            
+            // Uncollapse Dr. Heart first
+            document.getElementById('card-drHeart').classList.remove('collapsed');
+            document.getElementById('card-nutri').classList.add('collapsed');
+            document.getElementById('card-longevity').classList.add('collapsed');
+            document.getElementById('card-holistics').classList.add('collapsed');
+            document.getElementById('card-synthesizer').classList.add('collapsed');
+            
+            setStatus('Connecting to Ollama Cloud...', 'Starting analysis pipeline');
+            
+            try {
+                const response = await fetch('/run_round_table', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ case: caseInput, goals: goals, constraints: constraints, model: model })
+                });
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let currentAgent = null;
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    
+                    // Find complete SSE events (they end with double newline)
+                    while (buffer.includes('\n\n')) {
+                        const eventEnd = buffer.indexOf('\n\n');
+                        const eventBlock = buffer.slice(0, eventEnd);
+                        buffer = buffer.slice(eventEnd + 2);
+                        
+                        // Parse event type
+                        let eventType = null;
+                        let eventData = '';
+                        
+                        for (const line of eventBlock.split('\n')) {
+                            if (line.startsWith('event:')) {
+                                eventType = line.slice(5).trim();
+                            } else if (line.startsWith('data:')) {
+                                eventData = line.slice(5).trim();
+                            }
+                        }
+                        
+                        // Handle events
+                        if (eventType === 'agent_start') {
+                            currentAgent = eventData;
+                            const displayId = currentAgent === 'dr_heart' ? 'drHeart' : currentAgent;
+                            document.getElementById('status-' + displayId).textContent = 'Analyzing...';
+                            document.getElementById('status-' + displayId).style.color = '#00d9ff';
+                            document.getElementById('card-' + displayId).classList.remove('collapsed');
+                            setStatus(getAgentName(currentAgent) + ' is analyzing...', 'Watch the response appear in real-time');
+                        } else if (eventType === 'agent_chunk') {
+                            if (currentAgent && eventData.includes(':')) {
+                                const colonIdx = eventData.indexOf(':');
+                                const agentId = eventData.substring(0, colonIdx);
+                                const content = eventData.substring(colonIdx + 1);
+                                const displayId = agentId === 'dr_heart' ? 'drHeart' : agentId;
+                                document.getElementById('content-' + displayId).textContent += content;
+                            }
+                        } else if (eventType === 'agent_done') {
+                            if (currentAgent) {
+                                const displayId = currentAgent === 'dr_heart' ? 'drHeart' : currentAgent;
+                                document.getElementById('status-' + displayId).textContent = 'Complete';
+                                document.getElementById('status-' + displayId).style.color = '#00ff88';
+                            }
+                        }
+                    }
+                }
+                
+                setStatus('Round Table Complete!', 'All specialists have finished their analysis');
+                
+            } catch (error) {
+                alert('Error: ' + error.message);
+                statusBar.classList.remove('active');
+            } finally {
+                runBtn.disabled = false;
+            }
+        }
+        
+        function getAgentName(id) {
+            const names = { dr_heart: 'Dr. Heart', nutri: 'Nutri', longevity: 'Longevity', holistics: 'Holistics', synthesizer: 'Synthesizer' };
+            return names[id] || id;
+        }
+    </script>
+</body>
+</html>
