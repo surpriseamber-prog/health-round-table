@@ -103,6 +103,9 @@ def run_round_table(case, goals, constraints, model_choice, supplements):
     share_url = f"https://health-round-table.onrender.com/?id={did}"
     return results, did, share_url
 
+def on_page_load():
+    return [build_feed()]
+
 with gr.Blocks(title="Health Round Table") as demo:
     gr.Markdown("# 🌵 Health Round Table\n*Not medical advice — for educational debate only*")
 
@@ -153,7 +156,7 @@ with gr.Blocks(title="Health Round Table") as demo:
     debate_case_info = gr.Markdown("*Paste a debate ID above to load*")
 
     feed_display = gr.Markdown()
-    demo.load(fn=build_feed, inputs=[], outputs=[feed_display])
+    demo.load(fn=on_page_load, inputs=[], outputs=[feed_display])
 
     def on_start(case, goals, constraints, model, supplements):
         results, did, share_url = run_round_table(case, goals, constraints, model, supplements)
@@ -170,6 +173,8 @@ with gr.Blocks(title="Health Round Table") as demo:
         ]
 
     def on_load(debate_id):
+        if not debate_id:
+            return ["*Paste a debate ID above to load*"] + [""] * 7
         d = get_debate(debate_id.strip())
         if not d:
             return ["⚠️ Not found.", "", "", "", "", "", "", build_feed()]
