@@ -2,6 +2,9 @@ import gradio as gr
 import requests
 import time
 import hashlib
+import sqlite3
+import json
+import os
 from datetime import datetime
 
 API_KEY = "939d10536ea749c2ac9f1ae783335eaa.L8GP6pNpV7FVESvej9RAoDTT"
@@ -25,28 +28,66 @@ def avatar_html(key, label, emoji):
     <span style="font-size:1.2em;">{emoji}</span>
 </div>'''
 
-debates_db = {}
+# --- SQLite Database ---
+DB_PATH = os.path.join(os.path.dirname(__file__), "debates.db")
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS debates (
+            id TEXT PRIMARY KEY,
+            case_text TEXT,
+            goals TEXT,
+            constraints TEXT,
+            model TEXT,
+            supplements TEXT,
+            results TEXT,
+            timestamp TEXT,
+            views INTEGER DEFAULT 0
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
 
 def make_id():
     return hashlib.md5(str(time.time()).encode()).hexdigest()[:8]
 
 def save_debate(case, goals, constraints, model, supplements, results):
     did = make_id()
-    debates_db[did] = {
-        "case": case, "goals": goals, "constraints": constraints,
-        "model": model, "supplements": supplements, "results": results,
-        "timestamp": datetime.now().strftime("%b %d, %Y %I:%M %p"), "views": 0
-    }
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        INSERT INTO debates (id, case_text, goals, constraints, model, supplements, results, timestamp, views)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+    """, (did, case, goals, constraints, model, supplements, json.dumps(results), datetime.now().strftime("%b %d, %Y %I:%M %p")))
+    conn.commit()
+    conn.close()
     return did
 
 def get_debate(did):
-    d = debates_db.get(did)
-    if d:
-        d["views"] += 1
-    return d
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute("SELECT * FROM debates WHERE id = ?", (did,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "id": row[0], "case": row[1], "goals": row[2], "constraints": row[3],
+        "model": row[4], "supplements": row[5],
+        "results": json.loads(row[6]), "timestamp": row[7], "views": row[8]
+    }
+
+def increment_views(did):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("UPDATE debates SET views = views + 1 WHERE id = ?", (did,))
+    conn.commit()
+    conn.close()
 
 def get_recent():
-    return sorted([(k, v) for k, v in debates_db.items()], key=lambda x: x[1]["views"], reverse=True)[:10]
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("SELECT * FROM debates ORDER BY views DESC LIMIT 10").fetchall()
+    conn.close()
+    return [(r[0], {"case": r[1], "goals": r[2], "constraints": r[3], "model": r[4], "supplements": r[5], "results": json.loads(r[6]), "timestamp": r[7], "views": r[8]}) for r in rows]
 
 def build_feed():
     debates = get_recent()
@@ -59,6 +100,7 @@ def build_feed():
         lines.append(f"| `{did}` | {prev} | {d['timestamp']} | {d['views']} |")
     return "\n".join(lines)
 
+# --- API ---
 def chat(model, system, user_message):
     payload = {"model": model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user_message}], "stream": False}
     r = requests.post(f"{BASE_URL}/api/chat", headers=headers, json=payload)
@@ -178,8 +220,9 @@ with gr.Blocks(title="Health Round Table") as demo:
         d = get_debate(debate_id.strip())
         if not d:
             return ["⚠️ Not found.", "", "", "", "", "", "", build_feed()]
+        increment_views(d["id"])
         r = d["results"]
-        info = f"**Case:** {d['case']}\n**Goals:** {d['goals']}\n**Constraints:** {d['constraints']}\n**Ran:** {d['timestamp']} | Views: {d['views']}"
+        info = f"**Case:** {d['case']}\n**Goals:** {d['goals']}\n**Constraints:** {d['constraints']}\n**Ran:** {d['timestamp']} | Views: {d['views']+1}"
         return [info, r["synthesizer"], r["dr_heart"], r["nutri"], r["longevity"], r["holistics"], r["medi_suppi"], ""]
 
     start_btn.click(
