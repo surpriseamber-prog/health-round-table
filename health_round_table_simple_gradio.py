@@ -130,6 +130,7 @@ def build_ui():
 
         # TLDR Summary
         with gr.Accordion("💡 TLDR — Key Recommendations", open=True):
+            gr.HTML(avatar_html("synthesizer", "Synthesizer", "💡"))
             tldr_output = gr.Markdown("*Run a case to see recommendations*")
 
         # Dr. Heart
