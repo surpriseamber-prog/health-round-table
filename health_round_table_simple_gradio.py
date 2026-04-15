@@ -25,7 +25,7 @@ def avatar_html(key, label, emoji):
     <span style="font-size:1.2em;">{emoji}</span>
 </div>'''
 
-# --- Debate Storage ---
+# --- Storage ---
 debates_db = {}
 
 def make_id():
@@ -53,21 +53,19 @@ def build_feed():
     debates = get_recent()
     if not debates:
         return "*No debates saved yet — submit a case above!*"
-    lines = ["### 📖 Recent Debates\n"]
-    lines.append("| ID | Case Preview | Date | Views |")
-    lines.append("|----|------|------|-------|")
+    lines = ["### 📖 Recent Debates\n", "| ID | Case Preview | Date | Views |", "|----|------|------|-------|"]
     for did, d in debates:
         prev = (d["case"][:55]+"...") if len(d["case"])>55 else d["case"]
         prev = prev.replace("\n"," ")
         lines.append(f"| `{did}` | {prev} | {d['timestamp']} | {d['views']} |")
-    return "\n".join(rows)
+    return "\n".join(lines)
 
 # --- API ---
 def chat(model, system, user_message):
     payload = {"model": model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user_message}], "stream": False}
     r = requests.post(f"{BASE_URL}/api/chat", headers=headers, json=payload)
     if r.status_code != 200:
-        raise Exception(f"Error {r.status_code}: {r.text}")
+        raise Exception(f"API Error {r.status_code}")
     return r.json()["message"]["content"]
 
 def run_round_table(case, goals, constraints, model_choice, supplements):
@@ -106,7 +104,7 @@ def run_round_table(case, goals, constraints, model_choice, supplements):
     did = save_debate(case, goals, constraints, model_choice, supplements, results)
     share_url = f"https://health-round-table.onrender.com/?id={did}"
     share_link = f"**Saved!** [Open shared debate]({share_url}) | ID: `{did}`"
-    return share_link, results, did
+    return share_link, results["synthesizer"], results["dr_heart"], results["nutri"], results["longevity"], results["holistics"], results["medi_suppi"], did
 
 # --- UI ---
 with gr.Blocks(title="Health Round Table") as demo:
@@ -131,31 +129,25 @@ with gr.Blocks(title="Health Round Table") as demo:
     loading_status = gr.HTML("<div style='padding:10px;color:#f97316;font-weight:bold;'>⏳ Processing... 6 agents thinking (1-3 min)...</div>", visible=False)
     share_output = gr.Markdown(visible=False)
 
-    # TLDR
     with gr.Accordion("💡 TLDR — Key Recommendations", open=True):
         tldr_output = gr.Markdown("*Run a case to see recommendations*")
 
-    # Dr. Heart
     with gr.Accordion("Dr. Heart (Cardiology)", open=False):
         gr.HTML(avatar_html("dr_heart", "Dr. Heart", "❤️"))
         dr_heart_output = gr.Markdown("*Waiting for Dr. Heart...*")
 
-    # Nutri
     with gr.Accordion("Nutri (Functional Nutrition)", open=False):
         gr.HTML(avatar_html("nutri", "Nutri", "🥑"))
         nutri_output = gr.Markdown("*Waiting for Nutri...*")
 
-    # Longevity
     with gr.Accordion("Longevity (Anti-Aging Research)", open=False):
         gr.HTML(avatar_html("longevity", "Longevity", "⏳"))
         longevity_output = gr.Markdown("*Waiting for Longevity...*")
 
-    # Holistics
     with gr.Accordion("Holistics (Integrative Medicine)", open=False):
         gr.HTML(avatar_html("holistics", "Holistics", "🌿"))
         holistics_output = gr.Markdown("*Waiting for Holistics...*")
 
-    # Medi/Suppi
     with gr.Accordion("Medi/Suppi (Drug + Supplement Safety)", open=False):
         gr.HTML(avatar_html("medi_suppi", "Medi/Suppi", "💊"))
         medi_output = gr.Markdown("*Waiting for Medi/Suppi...*")
@@ -170,82 +162,59 @@ with gr.Blocks(title="Health Round Table") as demo:
     gr.Markdown("---")
     gr.Markdown("### 🔍 Load a Saved Debate")
     with gr.Row():
-        debate_id_input = gr.Textbox(label="Debate ID", placeholder="Paste debate ID here (e.g. 3d3ce012)", lines=1)
+        debate_id_input = gr.Textbox(label="Debate ID", placeholder="Paste debate ID here", lines=1)
         load_btn = gr.Button("Load")
     debate_case_info = gr.Markdown("*Paste an ID and click Load to view a saved debate*")
 
     # ---- Event handlers ----
-    def on_start(case, goals, constraints, model, supplements):
-        yield {
-            loading_status: gr.update(visible=True),
-            share_output: gr.update(visible=False),
-            tldr_output: "*Processing...*",
-            dr_heart_output: "*Processing...*",
-            nutri_output: "*Processing...*",
-            longevity_output: "*Processing...*",
-            holistics_output: "*Processing...*",
-            medi_output: "*Processing...*",
-        }
-        msg, results, did = run_round_table(case, goals, constraints, model, supplements)
-        yield {
-            loading_status: gr.update(visible=False),
-            share_output: gr.update(visible=True, value=msg),
-            tldr_output: results["synthesizer"],
-            dr_heart_output: results["dr_heart"],
-            nutri_output: results["nutri"],
-            longevity_output: results["longevity"],
-            holistics_output: results["holistics"],
-            medi_output: results["medi_suppi"],
-            feed_display: build_feed(),
-        }
+    # Outputs: loading_status, share_output, tldr_output, dr_heart, nutri, longevity, holistics, medi, feed_display
+    start_outputs = [loading_status, share_output, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output, feed_display]
 
+    def on_start(case, goals, constraints, model, supplements):
+        yield [True, False, "*Processing...*", "*Processing...*", "*Processing...*", "*Processing...*", "*Processing...*", "*Processing...*", ""]
+        try:
+            results = run_round_table(case, goals, constraints, model, supplements)
+            yield [
+                False,          # hide loading
+                results[0],      # share link (markdown)
+                results[1],      # synthesizer
+                results[2],      # dr_heart
+                results[3],      # nutri
+                results[4],      # longevity
+                results[5],      # holistics
+                results[6],      # medi
+                build_feed(),     # update feed
+            ]
+        except Exception as e:
+            yield [
+                False,
+                f"**Error:** {str(e)}",
+                "Error running Synthesizer",
+                "Error running Dr. Heart",
+                "Error running Nutri",
+                "Error running Longevity",
+                "Error running Holistics",
+                "Error running Medi/Suppi",
+                build_feed(),
+            ]
+
+    def on_clear():
+        return ["", "", "", "", "", "", "", "", "", build_feed()]
+
+    start_btn.click(fn=on_start, inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input], outputs=start_outputs)
+    clear_btn.click(fn=on_clear, inputs=[], outputs=[case_input, goals_input, constraints_input, supplements_input, loading_status, share_output, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output, feed_display])
+
+    # Load handler
     def on_load(debate_id):
         d = get_debate(debate_id.strip())
         if not d:
-            return {
-                debate_case_info: "⚠️ Debate not found. It may have been cleared after Render sleep.",
-                tldr_output: "*Run a new case to see recommendations*",
-                dr_heart_output: "*Waiting for Dr. Heart...*",
-                nutri_output: "*Waiting for Nutri...*",
-                longevity_output: "*Waiting for Longevity...*",
-                holistics_output: "*Waiting for Holistics...*",
-                medi_output: "*Waiting for Medi/Suppi...*",
-            }
+            return ["⚠️ Debate not found. It may have been cleared after Render sleep.", "", "", "", "", "", "", "*Run a new case*"]
         r = d["results"]
-        info = f"**Case:** {d['case']}\n**Goals:** {d['goals']}\n**Constraints:** {d['constraints']}\n**Model:** {d['model']} | **Ran:** {d['timestamp']} | **Views:** {d['views']}"
-        return {
-            debate_case_info: info,
-            tldr_output: r["synthesizer"],
-            dr_heart_output: r["dr_heart"],
-            nutri_output: r["nutri"],
-            longevity_output: r["longevity"],
-            holistics_output: r["holistics"],
-            medi_output: r["medi_suppi"],
-        }
+        info = f"**Case:** {d['case']}\n**Goals:** {d['goals']}\n**Constraints:** {d['constraints']}\n**Ran:** {d['timestamp']} | **Views:** {d['views']}"
+        return [info, r["synthesizer"], r["dr_heart"], r["nutri"], r["longevity"], r["holistics"], r["medi_suppi"], ""]
 
-    def on_clear():
-        return {
-            case_input: "",
-            goals_input: "",
-            constraints_input: "",
-            supplements_input: "",
-            loading_status: gr.update(visible=False),
-            share_output: gr.update(visible=False),
-            tldr_output: "*Run a case to see recommendations*",
-            dr_heart_output: "*Waiting for Dr. Heart...*",
-            nutri_output: "*Waiting for Nutri...*",
-            longevity_output: "*Waiting for Longevity...*",
-            holistics_output: "*Waiting for Holistics...*",
-            medi_output: "*Waiting for Medi/Suppi...*",
-            feed_display: build_feed(),
-        }
-
-    start_btn.click(fn=on_start, inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input],
-                    outputs=[loading_status, share_output, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output, feed_display])
-
-    clear_btn.click(fn=on_clear, inputs=[], outputs=[case_input, goals_input, constraints_input, supplements_input, loading_status, share_output, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output, feed_display])
-
-    load_btn.click(fn=on_load, inputs=[debate_id_input], outputs=[debate_case_info, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output])
+    load_outputs = [debate_case_info, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output, feed_display]
+    load_btn.click(fn=on_load, inputs=[debate_id_input], outputs=load_outputs)
 
 if __name__ == "__main__":
     import os
