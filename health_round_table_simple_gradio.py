@@ -166,7 +166,7 @@ with gr.Blocks(title="Health Round Table") as demo:
             return ["⚠️ Debate not found in database.", "", "", "", "", "", "", feed_html()]
         inc_views(did)
         r = d["results"]
-        info = f"**Case:** {d['case']}\n**Goals:** {d['goals']}\n**Constraints:** {d['constraints']}\n**Ran:** {d['timestamp']} | Views: {d['views']+1}"
+        info = f"**Case:** {d['case']}\n**Goals:** {d['goals']}\n**Constraints:** {d['constraints']}\n**Ran:** {d['timestamp']} | Views: {d['views']+1}\n\n**Share:** [Open debate](https://health-round-table.onrender.com/?id={did})"
         return [info, r["synthesizer"], r["dr_heart"], r["nutri"], r["longevity"], r["holistics"], r["medi_suppi"], ""]
 
     start_btn.click(fn=on_start, inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input],
