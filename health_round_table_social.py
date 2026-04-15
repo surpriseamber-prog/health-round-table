@@ -17,9 +17,6 @@ AVATARS = {
     "medi_suppi": "https://raw.githubusercontent.com/surpriseamber-prog/health-round-table/main/static/avatars/avatar_medi_suppi.jpg",
 }
 
-def avatar_img(key, size=48):
-    return f'<img src="{AVATARS[key]}" width="{size}" height="{size}" style="border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;">'
-
 # --- Storage ---
 debates_db = {}
 
@@ -72,8 +69,8 @@ def run_round_table(case, goals, constraints, model_choice, supplements):
     l = f"You are Longevity, anti-aging researcher.{ctx}\nBullet points."
     lo = ask(l, f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
 
-    ho = f"You are Holistics, integrative medicine.{ctx}\nBullet points."
-    ho = ask(ho, f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
+    ho_sys = f"You are Holistics, integrative medicine.{ctx}\nBullet points."
+    ho = ask(ho_sys, f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
 
     s = f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations.{ctx}"
     sy = ask(s, f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
@@ -117,6 +114,7 @@ def build():
                 loading = gr.HTML("<div style='padding:12px;color:#f97316;font-weight:bold;'>⏳ Processing... 6 agents are thinking (1-3 minutes)...</div>", visible=False)
                 share_link = gr.HTML(visible=False)
 
+                # Result sections - label + output for each agent
                 tldr_lbl = gr.Markdown("## 💡 Synthesizer — Key Recommendations", visible=False)
                 tldr_out = gr.Markdown(visible=False)
                 dh_lbl = gr.Markdown("## ❤️ Dr. Heart — Cardiology", visible=False)
@@ -132,17 +130,19 @@ def build():
 
                 gr.Markdown("*Each specialist reads all previous analyses.*")
 
+                # All outputs in order: loading, share_link, then pairs (label, output)
+                all_outputs = [loading, share_link, tldr_lbl, tldr_out, dh_lbl, dh_out, nu_lbl, nu_out, lo_lbl, lo_out, ho_lbl, ho_out, me_lbl, me_out]
+
                 def on_start(case, goals, constraints, model, supplements):
-                    # First yield: show loading
-                    yield [True, False, False, False, False, False, False, False, False, False, False, False, False, False]
+                    # Step 1: show loading
+                    yield [True, False, False, None, False, None, False, None, False, None, False, None, False, None]
+                    # Step 2: run agents and show results
                     did, r = run_round_table(case, goals, constraints, model, supplements)
                     url = f"https://health-round-table.onrender.com/?id={did}"
-                    # Second yield: show results
                     yield [
                         False,  # hide loading
-                        True,    # show share
-                        True, url,
-                        True, r["synthesizer"],
+                        url,     # show share link (string for HTML)
+                        True, r["synthesizer"],   # tldr_lbl visible, tldr_out content
                         True, r["dr_heart"],
                         True, r["nutri"],
                         True, r["longevity"],
@@ -150,10 +150,12 @@ def build():
                         True, r["medi_suppi"],
                     ]
 
-                all_outputs = [loading, share_link, tldr_lbl, tldr_out, dh_lbl, dh_out, nu_lbl, nu_out, lo_lbl, lo_out, ho_lbl, ho_out, me_lbl, me_out]
                 start_btn.click(fn=on_start, inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input], outputs=all_outputs)
 
-                clear_btn.click(fn=lambda: [False, False, False, None, False, None, False, None, False, None, False, None, False, None], inputs=[], outputs=all_outputs)
+                clear_btn.click(
+                    fn=lambda: [False, None, False, None, False, None, False, None, False, None, False, None, False, None],
+                    inputs=[], outputs=all_outputs
+                )
 
             # === RECENT TAB ===
             with gr.TabItem("📖 Recent Debates"):
@@ -164,7 +166,10 @@ def build():
                     did_input = gr.Textbox(label="Debate ID", placeholder="Paste debate ID", lines=1)
                     view_btn = gr.Button("🔍 Load")
                 did_out = gr.Markdown("*Paste a debate ID above to load it*")
-                view_btn.click(fn=load_did, inputs=[did_input], outputs=[did_out] + all_outputs)
+
+                # view uses same outputs as submit (14 items)
+                view_outputs = [did_out] + all_outputs  # 15 items total
+                view_btn.click(fn=on_load_did, inputs=[did_input], outputs=view_outputs)
 
             # === ABOUT TAB ===
             with gr.TabItem("ℹ️ About"):
@@ -184,27 +189,32 @@ def build():
 
     return demo
 
+def on_load_did(did):
+    d = get_debate(did)
+    if not d:
+        return ["⚠️ Debate not found.", False, None, False, None, False, None, False, None, False, None, False, None, False, None]
+    r = d["results"]
+    header = f"**Case:** {d['case']}\n**Goals:** {d['goals']}\n**Constraints:** {d['constraints']}\n**Ran:** {d['timestamp']}"
+    return [
+        header,
+        True, r["synthesizer"],
+        True, r["dr_heart"],
+        True, r["nutri"],
+        True, r["longevity"],
+        True, r["holistics"],
+        True, r["medi_suppi"],
+    ]
+
 def build_feed():
     debates = get_recent()
     if not debates:
         return "*No debates yet. Submit the first case!*"
-    rows = ["| Case | Date | Views | |", "|------|------|-------|---|"]
+    rows = ["| Case Preview | Date | Views | Link |", "|------|------|-------|------|"]
     for did, d in debates:
         prev = (d["case"][:70]+"...") if len(d["case"])>70 else d["case"]
         prev = prev.replace("\n"," ")
         rows.append(f"| {prev} | {d['timestamp']} | {d['views']} | [View →](/?id={did}) |")
     return "\n".join(rows)
-
-def load_did(did):
-    d = get_debate(did)
-    if not d:
-        return ["⚠️ Not found.", False, False, None, False, None, False, None, False, None, False, None, False, None]
-    r = d["results"]
-    header = f"**Case:** {d['case']}\n**Goals:** {d['goals']}\n**Constraints:** {d['constraints']}\n**Ran:** {d['timestamp']}"
-    return [
-        header, True, r["synthesizer"], True, r["dr_heart"],
-        True, r["nutri"], True, r["longevity"], True, r["holistics"], True, r["medi_suppi"]
-    ]
 
 if __name__ == "__main__":
     import os
