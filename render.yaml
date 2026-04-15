@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python health_round_table_social.py
+    startCommand: python health_round_table_simple_gradio.py
     envVars:
       - key: PYTHON_VERSION
         value: "3.10"

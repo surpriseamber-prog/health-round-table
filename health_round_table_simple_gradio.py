@@ -1,13 +1,13 @@
 import gradio as gr
 import requests
-import os
+import time
+import hashlib
+from datetime import datetime
 
 API_KEY = "939d10536ea749c2ac9f1ae783335eaa.L8GP6pNpV7FVESvej9RAoDTT"
 BASE_URL = "https://ollama.com"
-
 headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 
-# GitHub raw URLs for avatar images
 AVATARS = {
     "synthesizer": "https://raw.githubusercontent.com/surpriseamber-prog/health-round-table/main/static/avatars/avatar_synthesizer.jpg",
     "dr_heart": "https://raw.githubusercontent.com/surpriseamber-prog/health-round-table/main/static/avatars/avatar_dr_heart.jpg",
@@ -17,10 +17,7 @@ AVATARS = {
     "medi_suppi": "https://raw.githubusercontent.com/surpriseamber-prog/health-round-table/main/static/avatars/avatar_medi_suppi.jpg",
 }
 
-GITHUB = "https://github.com/surpriseamber-prog/health-round-table/blob/main/static/avatars"
-
 def avatar_html(key, label, emoji):
-    """Build an HTML snippet with avatar image + agent label."""
     url = AVATARS[key]
     return f'''<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
     <img src="{url}" width="48" height="48" style="border-radius:50%;object-fit:cover;">
@@ -28,151 +25,189 @@ def avatar_html(key, label, emoji):
     <span style="font-size:1.2em;">{emoji}</span>
 </div>'''
 
+# --- Debate Storage ---
+debates_db = {}
+
+def make_id():
+    return hashlib.md5(str(time.time()).encode()).hexdigest()[:8]
+
+def save_debate(case, goals, constraints, model, supplements, results):
+    did = make_id()
+    debates_db[did] = {
+        "case": case, "goals": goals, "constraints": constraints,
+        "model": model, "supplements": supplements, "results": results,
+        "timestamp": datetime.now().strftime("%b %d, %Y %I:%M %p"), "views": 0
+    }
+    return did
+
+def get_debate(did):
+    d = debates_db.get(did)
+    if d:
+        d["views"] += 1
+    return d
+
+def get_recent():
+    return sorted([(k, v) for k, v in debates_db.items()], key=lambda x: x[1]["views"], reverse=True)[:10]
+
+def build_feed():
+    debates = get_recent()
+    if not debates:
+        return "*No debates saved yet — submit a case above!*"
+    lines = ["### 📖 Recent Debates\n"]
+    lines.append("| # | Case Preview | Date | Views |")
+    lines.append("|---|------|------|-------|")
+    for i, (did, d) in enumerate(debates, 1):
+        prev = (d["case"][:60]+"...") if len(d["case"])>60 else d["case"]
+        prev = prev.replace("\n"," ")
+        lines.append(f"| {i} | {prev} | {d['timestamp']} | {d['views']} |")
+    return "\n".join(lines)
+
+# --- API ---
 def chat(model, system, user_message):
     payload = {"model": model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user_message}], "stream": False}
-    response = requests.post(f"{BASE_URL}/api/chat", headers=headers, json=payload)
-    if response.status_code != 200:
-        raise Exception(f"Error {response.status_code}: {response.text}")
-    return response.json()["message"]["content"]
+    r = requests.post(f"{BASE_URL}/api/chat", headers=headers, json=payload)
+    if r.status_code != 200:
+        raise Exception(f"Error {r.status_code}: {r.text}")
+    return r.json()["message"]["content"]
 
 def run_round_table(case, goals, constraints, model_choice, supplements):
-    context = ""
-    if goals:
-        context += f"\n\nPATIENT GOALS:\n{goals}"
-    if constraints:
-        context += f"\n\nIMPORTANT CONSTRAINTS:\n{constraints}"
+    ctx = ""
+    if goals: ctx += f"\n\nPATIENT GOALS:\n{goals}"
+    if constraints: ctx += f"\n\nIMPORTANT CONSTRAINTS:\n{constraints}"
+
+    def ask(sys, prompt):
+        try: return chat(model_choice, sys, prompt)
+        except Exception as e: return f"Error: {e}"
+
+    h = f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nBullet points."
+    dr = ask(h, f"Analyze: {case}")
+
+    n = f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}\nBullet points."
+    nu = ask(n, f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
+
+    l = f"You are Longevity, anti-aging researcher.{ctx}\nBullet points."
+    lo = ask(l, f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
+
+    ho_sys = f"You are Holistics, integrative medicine.{ctx}\nBullet points."
+    ho = ask(ho_sys, f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
+
+    s = f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations.{ctx}"
+    sy = ask(s, f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
+
+    if supplements and supplements.strip():
+        m = """You are Medi/Suppi, pharmacology safety specialist.
+1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE
+"Consult your doctor or pharmacist before making changes.\""""
+        me = ask(m, f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
+    else:
+        me = "No supplements listed."
+
+    results = {"synthesizer": sy, "dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "medi_suppi": me}
+    did = save_debate(case, goals, constraints, model_choice, supplements, results)
+    share_url = f"https://health-round-table.onrender.com/?id={did}"
+    return f"✅ Saved! [Share this debate]({share_url}) | ID: `{did}`", results, did
+
+# --- UI ---
+with gr.Blocks(title="Health Round Table") as demo:
+    gr.Markdown("# 🌵 Health Round Table\n*Not medical advice — for educational debate only*")
+
+    with gr.Row():
+        with gr.Column(scale=3):
+            case_input = gr.Textbox(label="Patient Case", placeholder="42yo female, swollen feet, weight 180lbs...", lines=5)
+        with gr.Column(scale=1):
+            goals_input = gr.Textbox(label="Goals", placeholder="Lower BP, more energy...", lines=2)
+            constraints_input = gr.Textbox(label="Constraints", placeholder="No pharma, vegetarian...", lines=2)
+            model_choice = gr.Dropdown(
+                choices=["mistral-large-3:675b", "qwen3-vl:235b-instruct", "deepseek-v3.2"],
+                value="mistral-large-3:675b", label="Model"
+            )
+            supplements_input = gr.Textbox(label="Supplements + Medications", placeholder="List vitamins, supplements, Rx meds...", lines=2)
+
+    with gr.Row():
+        start_btn = gr.Button("🚀 Start Round Table", variant="primary")
+        clear_btn = gr.Button("Clear")
+
+    loading_status = gr.HTML("<div style='padding:10px;color:#f97316;font-weight:bold;'>⏳ Processing... 6 agents thinking (1-3 min)...</div>", visible=False)
+
+    share_output = gr.HTML()
+
+    # TLDR
+    with gr.Accordion("💡 TLDR — Key Recommendations", open=True):
+        tldr_output = gr.Markdown("*Run a case to see recommendations*")
 
     # Dr. Heart
-    dr_heart_system = f"""You are Dr. Heart, a board-certified cardiologist. Focus on BP, cholesterol, circulation.{context}
-IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses focused."""
-    try:
-        dr_heart_response = chat(model_choice, dr_heart_system, f"Analyze: {case}")
-    except Exception as e:
-        dr_heart_response = f"Error: {str(e)}"
+    with gr.Accordion("Dr. Heart (Cardiology)", open=False):
+        gr.HTML(avatar_html("dr_heart", "Dr. Heart", "❤️"))
+        dr_heart_output = gr.Markdown("*Waiting for Dr. Heart...*")
 
     # Nutri
-    nutri_system = f"""You are Nutri, a functional medicine nutritionist. Build on Dr. Heart's foundation.{context}
-IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses focused."""
-    try:
-        nutri_response = chat(model_choice, nutri_system, f"React to Dr. Heart and add nutrition perspective:\n=== DR. HEART ===\n{dr_heart_response}\n=== END ===\nCase: {case}")
-    except Exception as e:
-        nutri_response = f"Error: {str(e)}"
+    with gr.Accordion("Nutri (Functional Nutrition)", open=False):
+        gr.HTML(avatar_html("nutri", "Nutri", "🥑"))
+        nutri_output = gr.Markdown("*Waiting for Nutri...*")
 
     # Longevity
-    longevity_system = f"""You are Longevity, a longevity researcher. Add anti-aging perspective.{context}
-IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses focused."""
-    try:
-        longevity_response = chat(model_choice, longevity_system, f"Build on Dr. Heart and Nutri:\n=== DR. HEART ===\n{dr_heart_response}\n=== NUTRI ===\n{nutri_response}\n=== END ===\nCase: {case}")
-    except Exception as e:
-        longevity_response = f"Error: {str(e)}"
+    with gr.Accordion("Longevity (Anti-Aging Research)", open=False):
+        gr.HTML(avatar_html("longevity", "Longevity", "⏳"))
+        longevity_output = gr.Markdown("*Waiting for Longevity...*")
 
     # Holistics
-    holistics_system = f"""You are Holistics, an integrative medicine practitioner. Add holistic and mind-body perspective.{context}
-IMPORTANT: Give practical, actionable advice. Use bullet points. Keep responses focused."""
-    try:
-        holistics_response = chat(model_choice, holistics_system, f"Build on all previous:\n=== DR. HEART ===\n{dr_heart_response}\n=== NUTRI ===\n{nutri_response}\n=== LONGEVITY ===\n{longevity_response}\n=== END ===\nCase: {case}")
-    except Exception as e:
-        holistics_response = f"Error: {str(e)}"
-
-    # Synthesizer
-    synthesizer_system = f"""You are the Synthesizer, a medical professor. Create consensus recommendations.{context}
-IMPORTANT: Give exactly 3 clear numbered recommendations (1. 2. 3.) that integrate all specialist input."""
-    try:
-        synthesizer_response = chat(model_choice, synthesizer_system, f"Create consensus:\n=== DR. HEART ===\n{dr_heart_response}\n=== NUTRI ===\n{nutri_response}\n=== LONGEVITY ===\n{longevity_response}\n=== HOLISTICS ===\n{holistics_response}\n=== END ===")
-    except Exception as e:
-        synthesizer_response = f"Error: {str(e)}"
+    with gr.Accordion("Holistics (Integrative Medicine)", open=False):
+        gr.HTML(avatar_html("holistics", "Holistics", "🌿"))
+        holistics_output = gr.Markdown("*Waiting for Holistics...*")
 
     # Medi/Suppi
-    medi_response = ""
-    if supplements and supplements.strip():
-        medi_system = """You are Medi/Suppi, a pharmacology and supplement safety specialist. Flag drug and supplement interactions, age-related risks, and potential harms.
-IMPORTANT: Not medical advice - educational safety checker only.
-Always include: "Always consult your doctor or pharmacist before making changes."
-Give: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE"""
-        medi_prompt = f"""Check for safety concerns:\nSUPPLEMENTS/MEDICATIONS:\n{supplements}\n\nCASE: {case}\nGOALS: {goals}\nCONSTRAINTS: {constraints}"""
-        try:
-            medi_response = chat(model_choice, medi_system, medi_prompt)
-        except Exception as e:
-            medi_response = f"Error: {str(e)}"
-    else:
-        medi_response = "No supplements listed. Enter what you're taking above to get interaction warnings."
+    with gr.Accordion("Medi/Suppi (Drug + Supplement Safety)", open=False):
+        gr.HTML(avatar_html("medi_suppi", "Medi/Suppi", "💊"))
+        medi_output = gr.Markdown("*Waiting for Medi/Suppi...*")
 
-    return "", synthesizer_response, dr_heart_response, nutri_response, longevity_response, holistics_response, medi_response
+    gr.Markdown("*Each specialist reads all previous analyses.*")
 
-def clear_all():
-    return [None, None, None, None, None, None, None, None, None, None, None, None, None]
+    # Recent Debates
+    feed_display = gr.Markdown()
+    demo.load(fn=build_feed, inputs=[], outputs=[feed_display])
 
-def build_ui():
-    with gr.Blocks(title="Health Round Table") as demo:
-        gr.Markdown("# Health Round Table\n*Not medical advice — for educational debate only*")
+    def on_start(case, goals, constraints, model, supplements):
+        yield {loading_status: gr.update(visible=True), share_output: gr.update(visible=False),
+              tldr_output: "*Processing...*", dr_heart_output: "*Processing...*",
+              nutri_output: "*Processing...*", longevity_output: "*Processing...*",
+              holistics_output: "*Processing...*", medi_output: "*Processing...*"}
+        msg, results, did = run_round_table(case, goals, constraints, model, supplements)
+        yield {
+            loading_status: gr.update(visible=False),
+            share_output: gr.update(visible=True, value=f"<div style='padding:8px;font-weight:bold;color:#22c55e;'>{msg}</div>"),
+            tldr_output: results["synthesizer"],
+            dr_heart_output: results["dr_heart"],
+            nutri_output: results["nutri"],
+            longevity_output: results["longevity"],
+            holistics_output: results["holistics"],
+            medi_output: results["medi_suppi"],
+            feed_display: build_feed(),
+        }
 
-        with gr.Row():
-            with gr.Column(scale=3):
-                case_input = gr.Textbox(label="Patient Case", placeholder="42yo female, swollen feet, weight 180lbs...", lines=5)
-            with gr.Column(scale=1):
-                goals_input = gr.Textbox(label="Goals", placeholder="Lower BP, more energy...", lines=2)
-                constraints_input = gr.Textbox(label="Constraints", placeholder="No pharma, vegetarian...", lines=2)
-                model_choice = gr.Dropdown(
-                    choices=["mistral-large-3:675b", "qwen3-vl:235b-instruct", "deepseek-v3.2"],
-                    value="mistral-large-3:675b",
-                    label="Model"
-                )
-                supplements_input = gr.Textbox(label="Supplements + Medications", placeholder="List vitamins, supplements, Rx meds...", lines=2)
+    def on_clear():
+        return {
+            case_input: "",
+            goals_input: "",
+            constraints_input: "",
+            supplements_input: "",
+            loading_status: gr.update(visible=False),
+            share_output: gr.update(visible=False),
+            tldr_output: "*Run a case to see recommendations*",
+            dr_heart_output: "*Waiting for Dr. Heart...*",
+            nutri_output: "*Waiting for Nutri...*",
+            longevity_output: "*Waiting for Longevity...*",
+            holistics_output: "*Waiting for Holistics...*",
+            medi_output: "*Waiting for Medi/Suppi...*",
+            feed_display: build_feed(),
+        }
 
-        with gr.Row():
-            start_btn = gr.Button("Start Round Table", variant="primary")
-            clear_btn = gr.Button("Clear")
+    start_btn.click(fn=on_start, inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input],
+                    outputs=[loading_status, share_output, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output, feed_display])
 
-        loading_status = gr.HTML(
-            "<div style='padding:10px;color:#f97316;font-weight:bold;'>Processing... 6 agents are thinking (1-3 minutes)...</div>",
-            visible=True
-        )
-
-        # TLDR Summary
-        with gr.Accordion("💡 TLDR — Key Recommendations", open=True):
-            gr.HTML(avatar_html("synthesizer", "Synthesizer", "💡"))
-            tldr_output = gr.Markdown("*Run a case to see recommendations*")
-
-        # Dr. Heart
-        with gr.Accordion("Dr. Heart (Cardiology)", open=False):
-            gr.HTML(avatar_html("dr_heart", "Dr. Heart", "❤️"))
-            dr_heart_output = gr.Markdown("*Waiting for Dr. Heart...*")
-
-        # Nutri
-        with gr.Accordion("Nutri (Functional Nutrition)", open=False):
-            gr.HTML(avatar_html("nutri", "Nutri", "🥑"))
-            nutri_output = gr.Markdown("*Waiting for Nutri...*")
-
-        # Longevity
-        with gr.Accordion("Longevity (Anti-Aging Research)", open=False):
-            gr.HTML(avatar_html("longevity", "Longevity", "⏳"))
-            longevity_output = gr.Markdown("*Waiting for Longevity...*")
-
-        # Holistics
-        with gr.Accordion("Holistics (Integrative Medicine)", open=False):
-            gr.HTML(avatar_html("holistics", "Holistics", "🌿"))
-            holistics_output = gr.Markdown("*Waiting for Holistics...*")
-
-        # Medi/Suppi
-        with gr.Accordion("Medi/Suppi (Drug + Supplement Safety)", open=False):
-            gr.HTML(avatar_html("medi_suppi", "Medi/Suppi", "💊"))
-            medi_output = gr.Markdown("*Waiting for Medi/Suppi...*")
-
-        gr.Markdown("*Each specialist reads all previous analyses. Medi/Suppi checks your supplements for interactions.*")
-
-        start_btn.click(
-            fn=run_round_table,
-            inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input],
-            outputs=[loading_status, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output]
-        )
-
-        clear_btn.click(fn=clear_all, inputs=[], outputs=[case_input, goals_input, constraints_input, model_choice, supplements_input, loading_status, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output])
-
-    return demo
+    clear_btn.click(fn=on_clear, inputs=[], outputs=[case_input, goals_input, constraints_input, supplements_input, loading_status, share_output, tldr_output, dr_heart_output, nutri_output, longevity_output, holistics_output, medi_output, feed_display])
 
 if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 7861))
     print(f"Starting Health Round Table on port {port}...")
-    demo = build_ui()
     demo.launch(server_name="0.0.0.0", server_port=port)
