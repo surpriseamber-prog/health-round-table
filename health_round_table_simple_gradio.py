@@ -105,7 +105,8 @@ def run_round_table(case, goals, constraints, model_choice, supplements):
     results = {"synthesizer": sy, "dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "medi_suppi": me}
     did = save_debate(case, goals, constraints, model_choice, supplements, results)
     share_url = f"https://health-round-table.onrender.com/?id={did}"
-    return f"✅ Saved! [Share this debate]({share_url}) | ID: `{did}`", results, did
+    share_link = f"**Saved!** [Click here to share this debate]({share_url}) | ID: `{did}`"
+    return share_link, results, did
 
 # --- UI ---
 with gr.Blocks(title="Health Round Table") as demo:
@@ -129,7 +130,7 @@ with gr.Blocks(title="Health Round Table") as demo:
 
     loading_status = gr.HTML("<div style='padding:10px;color:#f97316;font-weight:bold;'>⏳ Processing... 6 agents thinking (1-3 min)...</div>", visible=False)
 
-    share_output = gr.HTML()
+    share_output = gr.Markdown(visible=False)
 
     # TLDR
     with gr.Accordion("💡 TLDR — Key Recommendations", open=True):
@@ -174,7 +175,7 @@ with gr.Blocks(title="Health Round Table") as demo:
         msg, results, did = run_round_table(case, goals, constraints, model, supplements)
         yield {
             loading_status: gr.update(visible=False),
-            share_output: gr.update(visible=True, value=f"<div style='padding:8px;font-weight:bold;color:#22c55e;'>{msg}</div>"),
+            share_output: gr.update(visible=True, value=msg),
             tldr_output: results["synthesizer"],
             dr_heart_output: results["dr_heart"],
             nutri_output: results["nutri"],
