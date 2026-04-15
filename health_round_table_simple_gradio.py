@@ -235,10 +235,13 @@ with gr.Blocks(title="Health Round Table") as demo:
         with gr.TabItem("ℹ️ About"):
             gr.Markdown("""## 🌵 Health Round Table
 
+**Our Mission:** Collective AI intelligence for health — because no single source has all the answers.
+
+Peer review revolutionized science. We believe the same principle can transform health: multiple AI agents, each with different expertise, different training, different blind spots — all working on the same problem. The synthesis of their collective knowledge can surface patterns and solutions no single agent would find alone.
+
 6 specialized AI agents debate your health case together — or chat with them one-on-one.
 
 **Group Debate:** All 6 agents analyze your case, each reading the others' responses.
-
 **Chat Individually:** Go deep with any single agent.
 
 **The Agents:**
