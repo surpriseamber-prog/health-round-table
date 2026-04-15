@@ -7,21 +7,23 @@ BASE_URL = "https://ollama.com"
 
 headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 
-# Avatar image paths (served from static folder)
+# GitHub raw URLs for avatar images
 AVATARS = {
-    "synthesizer": "avatars/avatar_synthesizer.jpg",
-    "dr_heart": "avatars/avatar_dr_heart.jpg",
-    "nutri": "avatars/avatar_nutri.jpg",
-    "longevity": "avatars/avatar_longevity.jpg",
-    "holistics": "avatars/avatar_holistics.jpg",
-    "medi_suppi": "avatars/avatar_medi_suppi.jpg"
+    "synthesizer": "https://raw.githubusercontent.com/surpriseamber-prog/health-round-table/main/static/avatars/avatar_synthesizer.jpg",
+    "dr_heart": "https://raw.githubusercontent.com/surpriseamber-prog/health-round-table/main/static/avatars/avatar_dr_heart.jpg",
+    "nutri": "https://raw.githubusercontent.com/surpriseamber-prog/health-round-table/main/static/avatars/avatar_nutri.jpg",
+    "longevity": "https://raw.githubusercontent.com/surpriseamber-prog/health-round-table/main/static/avatars/avatar_longevity.jpg",
+    "holistics": "https://raw.githubusercontent.com/surpriseamber-prog/health-round-table/main/static/avatars/avatar_holistics.jpg",
+    "medi_suppi": "https://raw.githubusercontent.com/surpriseamber-prog/health-round-table/main/static/avatars/avatar_medi_suppi.jpg",
 }
+
+GITHUB = "https://github.com/surpriseamber-prog/health-round-table/blob/main/static/avatars"
 
 def avatar_html(key, label, emoji):
     """Build an HTML snippet with avatar image + agent label."""
-    path = AVATARS[key]
+    url = AVATARS[key]
     return f'''<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-    <img src="/static/{path}" width="48" height="48" style="border-radius:50%;object-fit:cover;">
+    <img src="{url}" width="48" height="48" style="border-radius:50%;object-fit:cover;">
     <span style="font-size:1.1em;font-weight:600;">{label}</span>
     <span style="font-size:1.2em;">{emoji}</span>
 </div>'''
@@ -137,7 +139,7 @@ def build_ui():
 
         # Nutri
         with gr.Accordion("Nutri (Functional Nutrition)", open=False):
-            gr.HTML(avatar_html("nutri", "Nutri", "🍔"))
+            gr.HTML(avatar_html("nutri", "Nutri", "🥑"))
             nutri_output = gr.Markdown("*Waiting for Nutri...*")
 
         # Longevity
