@@ -173,7 +173,8 @@ def build_ui():
                     clear_btn = gr.Button("Clear")
 
                 share_output = gr.HTML(visible=False)
-                loading_status = gr.HTML("<div style='padding:10px;color:#f97316;font-weight:bold;'>Processing... 6 agents are thinking (1-3 minutes)...</div>", visible=True)
+                loading_status = gr.HTML("<div id='loading' style='padding:12px;color:#f97316;font-weight:bold;font-size:1.1em;'>⏳ Processing... 6 agents are thinking (1-3 minutes)...</div>")
+                loading_hidden = gr.HTML(visible=False)
 
                 # Results shown inline after processing
                 tldr_label = gr.Markdown("## 💡 Synthesizer — Key Recommendations", visible=False)
@@ -232,11 +233,13 @@ A multi-agent AI debate platform where 6 specialized health agents analyze your 
 *⚠️ Not medical advice. Always consult a healthcare provider.*""")
 
         def show_results(case, goals, constraints, model_choice, supplements):
+            # Immediately show loading state
+            yield [gr.update(visible=True), None] + [None] * 12
             debate_id, results = run_round_table(case, goals, constraints, model_choice, supplements)
             share_url = f"https://health-round-table.onrender.com/?id={debate_id}"
             r = results
-            return [
-                gr.update(visible=False),  # loading - hide
+            yield [
+                gr.update(visible=False),  # hide loading, show results
                 f"### 🔗 [Share this debate]({share_url})",
                 gr.update(visible=True),
                 r["synthesizer"],
