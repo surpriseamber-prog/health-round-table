@@ -53,15 +53,14 @@ def get_debate(debate_id):
         d["views"] += 1
     return d
 
-def get_recent_debates(limit=20):
-    """Return list of (debate_id, case_preview, timestamp, views) sorted newest first."""
+def get_recent_debates():
     items = []
     for did, d in debates_db.items():
         case_preview = (d["case"][:80] + "...") if len(d["case"]) > 80 else d["case"]
         case_preview = case_preview.replace("\n", " ")
         items.append((did, case_preview, d["timestamp"], d["views"]))
-    items.sort(key=lambda x: x[3], reverse=True)  # sort by views
-    return items[:limit]
+    items.sort(key=lambda x: x[3], reverse=True)
+    return items[:20]
 
 # --- API calls ---
 def chat(model, system, user_message):
@@ -140,37 +139,22 @@ Give: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE"""
 
 # --- Gradio UI ---
 def build_feed_list():
-    """Build markdown table of recent debates."""
     debates = get_recent_debates()
     if not debates:
         return "*No debates yet. Be the first to submit a case!*"
-    
-    lines = ["## Recent Health Debates\n"]
-    lines.append("| Case | Date | Views | Link |")
-    lines.append("|------|------|-------|------|")
+    lines = ["| Case Preview | Date | Views | Link |", "|------|------|-------|------|"]
     for did, case_preview, timestamp, views in debates:
-        link = f"[View Debate →](/?id={did})"
+        link = f"[View →](/?id={did})"
         lines.append(f"| {case_preview} | {timestamp} | {views} | {link} |")
     return "\n".join(lines)
-
-def view_debate(debate_id):
-    """Display a saved debate by ID."""
-    d = get_debate(debate_id)
-    if not d:
-        return "⚠️ Debate not found. It may have been cleared on the last Render sleep. Please run a new case.", "", "", "", "", "", ""
-    r = d["results"]
-    share_url = f"https://health-round-table.onrender.com/?id={debate_id}"
-    header = f"""### 🔗 [Share this debate]({share_url})\n**Case:** {d['case']}\n**Goals:** {d['goals']}\n**Constraints:** {d['constraints']}\n**Model:** {d['model']}\n**Ran:** {d['timestamp']} | **Views:** {d['views']+1}"""
-    return header, r["synthesizer"], r["dr_heart"], r["nutri"], r["longevity"], r["holistics"], r["medi_suppi"]
 
 def build_ui():
     with gr.Blocks(title="Health Round Table") as demo:
         gr.Markdown("# 🌵 Health Round Table\n*Not medical advice — for educational debate only*")
 
         with gr.Tabs():
-            # --- Submit Tab ---
+            # === SUBMIT TAB ===
             with gr.TabItem("📝 Submit a Case"):
-                gr.Markdown("### Submit a health case for the Round Table debate")
                 with gr.Row():
                     with gr.Column(scale=3):
                         case_input = gr.Textbox(label="Patient Case", placeholder="42yo female, swollen feet, weight 180lbs...", lines=5)
@@ -188,28 +172,48 @@ def build_ui():
                     start_btn = gr.Button("🚀 Start Round Table", variant="primary")
                     clear_btn = gr.Button("Clear")
 
-                loading_status = gr.HTML("<div style='padding:10px;color:#f97316;font-weight:bold;'>Processing... 6 agents are thinking (1-3 minutes)...</div>", visible=False)
-
                 share_output = gr.HTML(visible=False)
+                loading_status = gr.HTML("<div style='padding:10px;color:#f97316;font-weight:bold;'>Processing... 6 agents are thinking (1-3 minutes)...</div>", visible=True)
+
+                # Results shown inline after processing
+                tldr_label = gr.Markdown("## 💡 Synthesizer — Key Recommendations", visible=False)
+                tldr_output = gr.Markdown(visible=False)
+
+                dr_heart_label = gr.Markdown("## ❤️ Dr. Heart — Cardiology", visible=False)
+                dr_heart_output = gr.Markdown(visible=False)
+
+                nutri_label = gr.Markdown("## 🥑 Nutri — Functional Nutrition", visible=False)
+                nutri_output = gr.Markdown(visible=False)
+
+                longevity_label = gr.Markdown("## ⏳ Longevity — Anti-Aging Research", visible=False)
+                longevity_output = gr.Markdown(visible=False)
+
+                holistics_label = gr.Markdown("## 🌿 Holistics — Integrative Medicine", visible=False)
+                holistics_output = gr.Markdown(visible=False)
+
+                medi_label = gr.Markdown("## 💊 Medi/Suppi — Drug + Supplement Safety", visible=False)
+                medi_output = gr.Markdown(visible=False)
+
                 gr.Markdown("*Each specialist reads all previous analyses. Medi/Suppi checks your supplements for interactions.*")
 
-            # --- Recent Debates Tab ---
+            # === RECENT DEBATES TAB ===
             with gr.TabItem("📖 Recent Debates"):
-                gr.Markdown("### Community Debates\n*Click any debate to view the full discussion*")
+                gr.Markdown("### Community Debates\n*Click any link to view that debate*")
                 feed_display = gr.HTML()
                 demo.load(fn=build_feed_list, inputs=[], outputs=[feed_display])
 
                 gr.Markdown("---")
-                gr.Markdown("### View a Debate")
-                debate_id_input = gr.Textbox(label="Debate ID", placeholder="Enter debate ID (or use link from feed above)", lines=1)
-                view_btn = gr.Button("🔍 Load Debate")
-                debate_output = gr.HTML()
+                gr.Markdown("### Load a Specific Debate by ID")
+                debate_id_input = gr.Textbox(label="Debate ID", placeholder="Paste the debate ID here", lines=1)
+                view_btn = gr.Button("🔍 Load")
+                debate_case_display = gr.Markdown("*No debate loaded*")
+                debate_output = gr.Markdown("*No debate loaded*")
 
-            # --- About Tab ---
+            # === ABOUT TAB ===
             with gr.TabItem("ℹ️ About"):
                 gr.Markdown("""## 🌵 Health Round Table
 
-A multi-agent AI debate platform where 6 specialized health agents analyze your case together — each reading and building on the others.
+A multi-agent AI debate platform where 6 specialized health agents analyze your case together — each building on the others.
 
 **The Agents:**
 - ❤️ **Dr. Heart** — Cardiologist (BP, cholesterol, circulation)
@@ -223,119 +227,75 @@ A multi-agent AI debate platform where 6 specialized health agents analyze your 
 1. Submit a patient case with goals and constraints
 2. All 6 agents analyze it, each reading previous agents' responses
 3. Get a synthesized consensus with 3 key recommendations
-4. Share the debate link with anyone
+4. Share the debate with anyone via link
 
 *⚠️ Not medical advice. Always consult a healthcare provider.*""")
 
-        # --- Accordion sections (shared across submit + view) ---
-        with gr.Accordion("💡 TLDR — Key Recommendations", open=True, visible=False) as tldr_accord:
-            tldr_output = gr.Markdown()
-
-        with gr.Accordion("❤️ Dr. Heart (Cardiology)", open=False, visible=False) as dr_heart_accord:
-            dr_heart_html = gr.HTML()
-            dr_heart_output = gr.Markdown()
-
-        with gr.Accordion("🥑 Nutri (Functional Nutrition)", open=False, visible=False) as nutri_accord:
-            nutri_html = gr.HTML()
-            nutri_output = gr.Markdown()
-
-        with gr.Accordion("⏳ Longevity (Anti-Aging Research)", open=False, visible=False) as longevity_accord:
-            longevity_html = gr.HTML()
-            longevity_output = gr.Markdown()
-
-        with gr.Accordion("🌿 Holistics (Integrative Medicine)", open=False, visible=False) as holistics_accord:
-            holistics_html = gr.HTML()
-            holistics_output = gr.Markdown()
-
-        with gr.Accordion("💊 Medi/Suppi (Drug + Supplement Safety)", open=False, visible=False) as medi_accord:
-            medi_html = gr.HTML()
-            medi_output = gr.Markdown()
-
-        def show_results(debate_id, results):
-            r = results
+        def show_results(case, goals, constraints, model_choice, supplements):
+            debate_id, results = run_round_table(case, goals, constraints, model_choice, supplements)
             share_url = f"https://health-round-table.onrender.com/?id={debate_id}"
+            r = results
             return [
-                gr.update(visible=True),
+                gr.update(visible=False),  # loading - hide
                 f"### 🔗 [Share this debate]({share_url})",
                 gr.update(visible=True),
-                gr.update(visible=True),
-                avatar_html("synthesizer", "Synthesizer", "💡"),
                 r["synthesizer"],
                 gr.update(visible=True),
-                gr.update(visible=True),
-                avatar_html("dr_heart", "Dr. Heart", "❤️"),
                 r["dr_heart"],
                 gr.update(visible=True),
-                gr.update(visible=True),
-                avatar_html("nutri", "Nutri", "🥑"),
                 r["nutri"],
                 gr.update(visible=True),
-                gr.update(visible=True),
-                avatar_html("longevity", "Longevity", "⏳"),
                 r["longevity"],
                 gr.update(visible=True),
-                gr.update(visible=True),
-                avatar_html("holistics", "Holistics", "🌿"),
                 r["holistics"],
                 gr.update(visible=True),
-                gr.update(visible=True),
-                avatar_html("medi_suppi", "Medi/Suppi", "💊"),
                 r["medi_suppi"],
             ]
 
-        # Output mapping: [share, share_html, tldr_visible, tldr_accord, tldr_html, tldr_md, dh_visible, dh_accord, dh_html, dh_md, ...]
-        all_outputs = [
-            share_output,
-            tldr_output, tldr_accord, tldr_output,
-            dr_heart_output, dr_heart_accord, dr_heart_html, dr_heart_output,
-            nutri_output, nutri_accord, nutri_html, nutri_output,
-            longevity_output, longevity_accord, longevity_html, longevity_output,
-            holistics_output, holistics_accord, holistics_html, holistics_output,
-            medi_output, medi_accord, medi_html, medi_output,
-        ]
-
-        # Actually map correctly - let's be explicit
-        outputs = [
-            share_output,
-            tldr_output, tldr_accord,
-            dr_heart_output, dr_heart_accord,
-            nutri_output, nutri_accord,
-            longevity_output, longevity_accord,
-            holistics_output, holistics_accord,
-            medi_output, medi_accord,
-        ]
-
-        def run_and_show(case, goals, constraints, model_choice, supplements):
-            debate_id, results = run_round_table(case, goals, constraints, model_choice, supplements)
-            yield [gr.update(visible=True)] + [None] * 12
-            r = results
-            share_url = f"https://health-round-table.onrender.com/?id={debate_id}"
-            yield [
-                f"### 🔗 [Share this debate]({share_url})",
-                gr.update(visible=True),
-                avatar_html("synthesizer", "Synthesizer", "💡") + r["synthesizer"],
-                gr.update(visible=True),
-                avatar_html("dr_heart", "Dr. Heart", "❤️") + r["dr_heart"],
-                gr.update(visible=True),
-                avatar_html("nutri", "Nutri", "🥑") + r["nutri"],
-                gr.update(visible=True),
-                avatar_html("longevity", "Longevity", "⏳") + r["longevity"],
-                gr.update(visible=True),
-                avatar_html("holistics", "Holistics", "🌿") + r["holistics"],
-                gr.update(visible=True),
-                avatar_html("medi_suppi", "Medi/Suppi", "💊") + r["medi_suppi"],
-            ]
+        def clear_all_fields():
+            return [None, None, None, None, None, None, None, None, None, None, None, None, None]
 
         start_btn.click(
-            fn=run_and_show,
+            fn=show_results,
             inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input],
-            outputs=outputs
+            outputs=[
+                loading_status,
+                share_output,
+                tldr_label, tldr_output,
+                dr_heart_label, dr_heart_output,
+                nutri_label, nutri_output,
+                longevity_label, longevity_output,
+                holistics_label, holistics_output,
+                medi_label, medi_output,
+            ]
         )
 
         clear_btn.click(
-            fn=lambda: [None] * 13,
+            fn=clear_all_fields,
             inputs=[],
-            outputs=[case_input, goals_input, constraints_input, model_choice, supplements_input, loading_status, share_output, tldr_output, tldr_accord, dr_heart_output, dr_heart_accord, nutri_output, nutri_accord, longevity_output, longevity_accord, holistics_output, holistics_accord, medi_output, medi_accord]
+            outputs=[case_input, goals_input, constraints_input, model_choice, supplements_input, loading_status, share_output, tldr_label, tldr_output, dr_heart_label, dr_heart_output, nutri_label, nutri_output, longevity_label, longevity_output, holistics_label, holistics_output, medi_label, medi_output]
+        )
+
+        def load_debate(debate_id):
+            d = get_debate(debate_id)
+            if not d:
+                return ["⚠️ Debate not found.", ""] + [None] * 12
+            r = d["results"]
+            header = f"**Case:** {d['case']}\n\n**Goals:** {d['goals']}\n\n**Constraints:** {d['constraints']}\n\n**Model:** {d['model']} | **Ran:** {d['timestamp']}"
+            return [
+                header,
+                f"## 💡 Synthesizer\n{r['synthesizer']}",
+                f"## ❤️ Dr. Heart\n{r['dr_heart']}",
+                f"## 🥑 Nutri\n{r['nutri']}",
+                f"## ⏳ Longevity\n{r['longevity']}",
+                f"## 🌿 Holistics\n{r['holistics']}",
+                f"## 💊 Medi/Suppi\n{r['medi_suppi']}",
+            ] + [None] * 6  # pad to match expected outputs
+
+        view_btn.click(
+            fn=load_debate,
+            inputs=[debate_id_input],
+            outputs=[debate_case_display, debate_output, tldr_label, tldr_output, dr_heart_label, dr_heart_output, nutri_label, nutri_output, longevity_label, longevity_output, holistics_label, holistics_output, medi_label, medi_output]
         )
 
     return demo
