@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 
 API_KEY = "939d10536ea749c2ac9f1ae783335eaa.L8GP6pNpV7FVESvej9RAoDTT"
-BASE_URL = "https://ollama.com"
+BASE_URL = "https://openrouter.ai/api/v1"
 headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 
 AVATARS = {
@@ -107,10 +107,10 @@ def feed_html():
 # --- API ---
 def chat(model, system, messages):
     payload = {"model": model, "messages": [{"role": "system", "content": system}] + messages, "stream": False}
-    r = requests.post(f"{BASE_URL}/api/chat", headers=headers, json=payload)
+    r = requests.post(f"{BASE_URL}/chat/completions", headers=headers, json=payload)
     if r.status_code != 200:
         raise Exception(f"API Error {r.status_code}")
-    return r.json()["message"]["content"]
+    return r.json()["choices"][0]["message"]["content"]
 
 def run_debate(case, goals, constraints, model_choice, supplements, guest):
     guest_block = f"\n\nOTHER AI PERSPECTIVES (submitted by the patient):\n{guest}" if guest and guest.strip() else ""
@@ -154,7 +154,7 @@ with gr.Blocks(title="Health Round Table") as demo:
                 with gr.Column(scale=1):
                     goals_input = gr.Textbox(label="Goals", placeholder="Lower BP, more energy...", lines=2)
                     constraints_input = gr.Textbox(label="Constraints", placeholder="No pharma, vegetarian...", lines=2)
-                    model_choice = gr.Dropdown(choices=["mistral-large-3:675b","qwen3-vl:235b-instruct","deepseek-v3.2"], value="mistral-large-3:675b", label="Model")
+                    model_choice = gr.Dropdown(choices=["openrouter/auto","mistral/mistral-large-latest","qwen/qwen-vl-plus","deepseek/deepseek-chat-v3-abbdd0a"], value="openrouter/auto", label="Model")
                     supplements_input = gr.Textbox(label="Supplements + Medications", placeholder="List vitamins, supplements...", lines=2)
 
             start_btn = gr.Button("🚀 Start Round Table", variant="primary")
