@@ -115,9 +115,12 @@ def chat(model, system, messages):
 def run_debate(case, goals, constraints, model_choice, supplements, guest):
     guest_block = f"\n\nOTHER AI PERSPECTIVES (submitted by the patient):\n{guest}" if guest and guest.strip() else ""
     ctx = (f"\n\nPATIENT GOALS:\n{goals}" if goals else "") + (f"\n\nIMPORTANT CONSTRAINTS:\n{constraints}" if constraints else "") + guest_block
-    def ask(sys, prompt):
-        try: return chat(model_choice, sys, [{"role": "user", "content": prompt}])
-        except Exception as e: return f"Error: {e}"
+    def ask(sys, prompt, retries=1):
+        for attempt in range(retries + 1):
+            try: return chat(model_choice, sys, [{"role": "user", "content": prompt}])
+            except Exception as e:
+                if attempt == retries: return f"Error after {retries+1} attempts: {str(e)[:100]}"
+                time.sleep(2)
     dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nBullet points.", f"Analyze: {case}")
     nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}\nBullet points.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
     lo = ask(f"You are Longevity, anti-aging researcher.{ctx}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
@@ -237,24 +240,16 @@ with gr.Blocks(title="Health Round Table") as demo:
         with gr.TabItem("ℹ️ About"):
             gr.Markdown("""## 🌵 Health Round Table
 
-**Our Mission:** Collective AI intelligence for health — because no single source has all the answers.
+**Mission:** Collective AI intelligence for health — multiple experts, one synthesis.
 
-Peer review revolutionized science. We believe the same principle can transform health: multiple AI agents, each with different expertise, different training, different blind spots — all working on the same problem. The synthesis of their collective knowledge can surface patterns and solutions no single agent would find alone.
+6 AI agents analyze your case together. Each reads the others' work. The synthesis surfaces solutions no single source would find.
 
-6 specialized AI agents debate your health case together — or chat with them one-on-one.
+**Group Debate:** All 6 agents together.
+**Chat Individually:** Talk to one agent at a time.
 
-**Group Debate:** All 6 agents analyze your case, each reading the others' responses.
-**Chat Individually:** Go deep with any single agent.
+**The Agents:** ❤️ Dr. Heart · 🥑 Nutri · ⏳ Longevity · 🌿 Holistics · 💡 Synthesizer · 💊 Medi/Suppi
 
-**The Agents:**
-- ❤️ **Dr. Heart** — Cardiologist
-- 🥑 **Nutri** — Functional Nutritionist
-- ⏳ **Longevity** — Anti-Aging Researcher
-- 🌿 **Holistics** — Integrative Medicine
-- 💡 **Synthesizer** — Consensus Professor
-- 💊 **Medi/Suppi** — Supplement Safety
-
-*⚠️ Not medical advice. Always consult a healthcare provider.*
+*⚠️ Not medical advice.*
 """)
 
 if __name__ == "__main__":
