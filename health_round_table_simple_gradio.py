@@ -112,8 +112,9 @@ def chat(model, system, messages):
         raise Exception(f"API Error {r.status_code}")
     return r.json()["message"]["content"]
 
-def run_debate(case, goals, constraints, model_choice, supplements):
-    ctx = (f"\n\nPATIENT GOALS:\n{goals}" if goals else "") + (f"\n\nIMPORTANT CONSTRAINTS:\n{constraints}" if constraints else "")
+def run_debate(case, goals, constraints, model_choice, supplements, guest):
+    guest_block = f"\n\nOTHER AI PERSPECTIVES (submitted by the patient):\n{guest}" if guest and guest.strip() else ""
+    ctx = (f"\n\nPATIENT GOALS:\n{goals}" if goals else "") + (f"\n\nIMPORTANT CONSTRAINTS:\n{constraints}" if constraints else "") + guest_block
     def ask(sys, prompt):
         try: return chat(model_choice, sys, [{"role": "user", "content": prompt}])
         except Exception as e: return f"Error: {e}"
@@ -149,6 +150,7 @@ with gr.Blocks(title="Health Round Table") as demo:
             with gr.Row():
                 with gr.Column(scale=3):
                     case_input = gr.Textbox(label="Patient Case", placeholder="42yo female, swollen feet...", lines=5)
+                    guest_input = gr.Textbox(label="🌐 Guest Perspectives (paste what other AIs said — Grok, Claude, etc.)", placeholder="Paste any external AI analysis here...", lines=3)
                 with gr.Column(scale=1):
                     goals_input = gr.Textbox(label="Goals", placeholder="Lower BP, more energy...", lines=2)
                     constraints_input = gr.Textbox(label="Constraints", placeholder="No pharma, vegetarian...", lines=2)
@@ -192,8 +194,8 @@ with gr.Blocks(title="Health Round Table") as demo:
             feed_out = gr.HTML()
             demo.load(fn=lambda: [feed_html()], inputs=[], outputs=[feed_out])
 
-            def on_start(case, goals, constraints, model, supplements):
-                results, did, url = run_debate(case, goals, constraints, model, supplements)
+            def on_start(case, goals, constraints, model, supplements, guest):
+                results, did, url = run_debate(case, goals, constraints, model, supplements, guest)
                 share = f"**Saved!** [Open debate]({url}) | ID: `{did}`"
                 return [results["synthesizer"], results["dr_heart"], results["nutri"], results["longevity"], results["holistics"], results["medi_suppi"], share, feed_html()]
 
@@ -209,7 +211,7 @@ with gr.Blocks(title="Health Round Table") as demo:
                 info = f"**Case:** {d['case']}\n**Goals:** {d['goals']}\n**Constraints:** {d['constraints']}\n**Ran:** {d['timestamp']} | Views: {d['views']+1}\n\n**Share:** [Open debate](https://health-round-table.onrender.com/?id={did})"
                 return [info, r["synthesizer"], r["dr_heart"], r["nutri"], r["longevity"], r["holistics"], r["medi_suppi"], ""]
 
-            start_btn.click(fn=on_start, inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input],
+            start_btn.click(fn=on_start, inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input, guest_input],
                           outputs=[tldr_output, dr_out, nu_out, lo_out, ho_out, me_out, did_info, feed_out])
             load_btn.click(fn=on_load, inputs=[did_input],
                           outputs=[did_info, tldr_output, dr_out, nu_out, lo_out, ho_out, me_out, feed_out])
