@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 
 API_KEY = "939d10536ea749c2ac9f1ae783335eaa.L8GP6pNpV7FVESvej9RAoDTT"
-BASE_URL = "https://api.ollama.com/v1"
+BASE_URL = "https://ollama.com"
 headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 
 AVATARS = {
@@ -107,7 +107,7 @@ def feed_html():
 # --- API ---
 def chat(model, system, messages):
     payload = {"model": model, "messages": [{"role": "system", "content": system}] + messages, "stream": False}
-    r = requests.post(f"{BASE_URL}/chat/completions", headers=headers, json=payload)
+    r = requests.post(f"{BASE_URL}/api/chat", headers=headers, json=payload)
     if r.status_code != 200:
         raise Exception(f"API Error {r.status_code}")
     return r.json()["message"]["content"]
