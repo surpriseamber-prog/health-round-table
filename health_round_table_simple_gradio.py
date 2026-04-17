@@ -8,8 +8,8 @@ import os
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-API_KEY = "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"
-BASE_URL = "https://openrouter.ai/api/v1"
+API_KEY = "939d10536ea749c2ac9f1ae783335eaa.L8GP6pNpV7FVESvej9RAoDTT"
+BASE_URL = "https://api.ollama.com"
 headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 
 AVATARS = {
@@ -108,10 +108,10 @@ def feed_html():
 # --- API ---
 def chat(model, system, messages):
     payload = {"model": model, "messages": [{"role": "system", "content": system}] + messages, "stream": False}
-    r = requests.post(f"{BASE_URL}/chat/completions", headers=headers, json=payload)
+    r = requests.post(f"{BASE_URL}/api/chat", headers=headers, json=payload)
     if r.status_code != 200:
         raise Exception(f"API Error {r.status_code}: {r.text}")
-    return r.json()["choices"][0]["message"]["content"]
+    return r.json()["message"]["content"]
 
 def run_debate(case, goals, constraints, model_choice, supplements, guest):
     guest_block = f"\n\nOTHER AI PERSPECTIVES (submitted by the patient):\n{guest}" if guest and guest.strip() else ""
@@ -176,7 +176,7 @@ with gr.Blocks(title="Health Round Table") as demo:
                 with gr.Column(scale=1):
                     goals_input = gr.Textbox(label="Goals", placeholder="Lower BP, more energy...", lines=2)
                     constraints_input = gr.Textbox(label="Constraints", placeholder="No pharma, vegetarian...", lines=2)
-                    model_choice = gr.Dropdown(choices=["openrouter/auto","mistral/mistral-large-latest","qwen/qwen-vl-plus","deepseek/deepseek-chat-v3-abbdd0a"], value="openrouter/auto", label="Model")
+                    model_choice = gr.Dropdown(choices=["deepseek-v3.2","qwen3-vl:235b-instruct","gemma3:27b","minimax-m2.7"], value="deepseek-v3.2", label="Model")
                     supplements_input = gr.Textbox(label="Supplements + Medications", placeholder="List vitamins, supplements...", lines=2)
 
             start_btn = gr.Button("🚀 Start Round Table", variant="primary")
