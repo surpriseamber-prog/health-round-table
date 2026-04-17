@@ -7,7 +7,7 @@ import json
 import os
 from datetime import datetime
 
-API_KEY = "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"
+API_KEY = "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"
 BASE_URL = "https://openrouter.ai/api/v1"
 headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 
