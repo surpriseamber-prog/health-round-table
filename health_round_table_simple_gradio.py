@@ -6,6 +6,7 @@ import sqlite3
 import json
 import os
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 API_KEY = "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"
 BASE_URL = "https://openrouter.ai/api/v1"
@@ -109,21 +110,42 @@ def chat(model, system, messages):
     payload = {"model": model, "messages": [{"role": "system", "content": system}] + messages, "stream": False}
     r = requests.post(f"{BASE_URL}/chat/completions", headers=headers, json=payload)
     if r.status_code != 200:
-        raise Exception(f"API Error {r.status_code}")
+        raise Exception(f"API Error {r.status_code}: {r.text}")
     return r.json()["choices"][0]["message"]["content"]
 
 def run_debate(case, goals, constraints, model_choice, supplements, guest):
     guest_block = f"\n\nOTHER AI PERSPECTIVES (submitted by the patient):\n{guest}" if guest and guest.strip() else ""
     ctx = (f"\n\nPATIENT GOALS:\n{goals}" if goals else "") + (f"\n\nIMPORTANT CONSTRAINTS:\n{constraints}" if constraints else "") + guest_block
+
     def ask(sys, prompt):
-        try: return chat(model_choice, sys, [{"role": "user", "content": prompt}])
-        except Exception as e: return f"Error: {e}"
-    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nBullet points.", f"Analyze: {case}")
-    nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}\nBullet points.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
-    lo = ask(f"You are Longevity, anti-aging researcher.{ctx}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
-    ho = ask(f"You are Holistics, integrative medicine.{ctx}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
-    sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations.{ctx}", f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
-    me = "No supplements listed." if not (supplements and supplements.strip()) else ask("You are Medi/Suppi, pharmacology safety specialist.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'", f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
+        try:
+            return chat(model_choice, sys, [{"role": "user", "content": prompt}])
+        except Exception as e:
+            return f"Error: {e}"
+
+    # Phase 1: Run 4 agents in parallel
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        f_dr = executor.submit(ask, f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nBullet points.", f"Analyze: {case}")
+        f_nu = executor.submit(ask, f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}\nBullet points.", f"React:\n=== DR. HEART ===\n{{dr_result}}\nCase: {case}")
+        f_lo = executor.submit(ask, f"You are Longevity, anti-aging researcher.{ctx}\nBullet points.", f"Build:\n=== DR. HEART ===\n{{dr_result}}\n=== NUTRI ===\n{{nu_result}}\nCase: {case}")
+        f_ho = executor.submit(ask, f"You are Holistics, integrative medicine.{ctx}\nBullet points.", f"Build:\n=== DR. HEART ===\n{{dr_result}}\n=== NUTRI ===\n{{nu_result}}\n=== LONGEVITY ===\n{{lo_result}}\nCase: {case}")
+
+        dr = f_dr.result()
+        nu = f_nu.result()
+        lo = f_lo.result()
+        ho = f_ho.result()
+
+    # Phase 2: Synthesizer needs all previous agents
+    sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations.{ctx}",
+            f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
+
+    # Phase 3: Medi/Suppi independent
+    if supplements and supplements.strip():
+        me = ask("You are Medi/Suppi, pharmacology safety specialist.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'",
+                f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
+    else:
+        me = "No supplements listed."
+
     results = {"synthesizer": sy, "dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "medi_suppi": me}
     did = save_debate(case, goals, constraints, model_choice, supplements, results)
     return results, did, f"https://health-round-table.onrender.com/?id={did}"
@@ -158,6 +180,7 @@ with gr.Blocks(title="Health Round Table") as demo:
                     supplements_input = gr.Textbox(label="Supplements + Medications", placeholder="List vitamins, supplements...", lines=2)
 
             start_btn = gr.Button("🚀 Start Round Table", variant="primary")
+            loading_display = gr.HTML("<p style='color:#aaa;text-align:center;'>⏳ Running 6 specialist agents in parallel...</p>", visible=False)
 
             with gr.Accordion("💡 TLDR — Key Recommendations", open=True):
                 tldr_output = gr.Markdown("*Results appear here*")
@@ -195,26 +218,32 @@ with gr.Blocks(title="Health Round Table") as demo:
             demo.load(fn=lambda: [feed_html()], inputs=[], outputs=[feed_out])
 
             def on_start(case, goals, constraints, model, supplements, guest):
+                # Show loading, hide results
+                yield [None, None, None, None, None, None, None, None, "⏳ Running 6 specialists in parallel...", feed_html()]
                 results, did, url = run_debate(case, goals, constraints, model, supplements, guest)
                 share = f"**Saved!** [Open debate]({url}) | ID: `{did}`"
-                return [results["synthesizer"], results["dr_heart"], results["nutri"], results["longevity"], results["holistics"], results["medi_suppi"], share, feed_html()]
+                # Return to empty/placeholder state then fill in results
+                yield [results["synthesizer"], results["dr_heart"], results["nutri"], results["longevity"], results["holistics"], results["medi_suppi"], share, "", feed_html()]
 
             def on_load(did_raw):
                 did = did_raw.strip() if did_raw else ""
                 if not did:
-                    return ["*Paste a debate ID above*", "", "", "", "", "", "", feed_html()]
+                    return ["*Paste a debate ID above*", "", "", "", "", "", "", "", feed_html()]
                 d = load_debate(did)
                 if not d:
-                    return ["⚠️ Not found.", "", "", "", "", "", "", feed_html()]
+                    return ["⚠️ Not found.", "", "", "", "", "", "", "", feed_html()]
                 inc_views(did)
                 r = d["results"]
                 info = f"**Case:** {d['case']}\n**Goals:** {d['goals']}\n**Constraints:** {d['constraints']}\n**Ran:** {d['timestamp']} | Views: {d['views']+1}\n\n**Share:** [Open debate](https://health-round-table.onrender.com/?id={did})"
-                return [info, r["synthesizer"], r["dr_heart"], r["nutri"], r["longevity"], r["holistics"], r["medi_suppi"], ""]
+                return [info, r["synthesizer"], r["dr_heart"], r["nutri"], r["longevity"], r["holistics"], r["medi_suppi"], "", ""]
 
-            start_btn.click(fn=on_start, inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input, guest_input],
-                          outputs=[tldr_output, dr_out, nu_out, lo_out, ho_out, me_out, did_info, feed_out])
+            start_btn.click(
+                fn=on_start,
+                inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input, guest_input],
+                outputs=[tldr_output, dr_out, nu_out, lo_out, ho_out, me_out, did_info, loading_display, feed_out]
+            )
             load_btn.click(fn=on_load, inputs=[did_input],
-                          outputs=[did_info, tldr_output, dr_out, nu_out, lo_out, ho_out, me_out, feed_out])
+                          outputs=[did_info, tldr_output, dr_out, nu_out, lo_out, ho_out, me_out, loading_display, feed_out])
 
         # === INDIVIDUAL CHAT TABS ===
         with gr.TabItem("💬 Chat Individually"):
