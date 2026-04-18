@@ -218,11 +218,10 @@ with gr.Blocks(title="Health Round Table") as demo:
             demo.load(fn=lambda: [feed_html()], inputs=[], outputs=[feed_out])
 
             def on_start(case, goals, constraints, model, supplements, guest):
-                # Show loading, hide results
-                yield [None, None, None, None, None, None, None, None, "⏳ Running 6 specialists in parallel...", feed_html()]
+                # Show loading, hide results (9 outputs: tldr, dr, nu, lo, ho, me, share, loading, feed)
+                yield ["*Working...*", "*Working...*", "*Working...*", "*Working...*", "*Working...*", "*Working...*", "", "⏳ Running 6 specialists in parallel...", feed_html()]
                 results, did, url = run_debate(case, goals, constraints, model, supplements, guest)
                 share = f"**Saved!** [Open debate]({url}) | ID: `{did}`"
-                # Return to empty/placeholder state then fill in results
                 yield [results["synthesizer"], results["dr_heart"], results["nutri"], results["longevity"], results["holistics"], results["medi_suppi"], share, "", feed_html()]
 
             def on_load(did_raw):
