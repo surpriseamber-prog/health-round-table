@@ -189,7 +189,7 @@ with gr.Blocks(title="Health Round Table") as demo:
         with gr.TabItem("🎯 Group Debate"):
             with gr.Row():
                 with gr.Column(scale=3):
-                    case_input = gr.Textbox(label="Patient Case", placeholder="Age: 42\nSex: F\nWeight: 150 lbs\nHeight: 5'4\"\nBPM: 95\nSymptoms: swollen feet (edema) for 2 weeks, occasional shortness of breath\nExercise level: sedentary — 1 day a week... none\n\nAdd any other details here.", lines=7)
+                    case_input = gr.Textbox(label="Patient Case", placeholder="Age: 42\nM/F: F\nWeight: 150 lbs\nHeight: 5'4\"\nBPM: 95\nSymptoms: swollen feet (edema) for 2 weeks, occasional shortness of breath\nExercise level: sedentary, 1 day a week, none\n\nAdditional Details:", lines=8)
                     guest_input = gr.Textbox(label="🌐 Guest Perspectives (paste what other AIs said — Grok, Claude, etc.)", placeholder="Paste any external AI analysis here...", lines=3)
                 with gr.Column(scale=1):
                     goals_input = gr.Textbox(label="Goals", placeholder="Lower BP, more energy...", lines=2)
