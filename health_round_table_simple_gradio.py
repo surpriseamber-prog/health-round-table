@@ -56,10 +56,28 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "debates.db")
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("CREATE TABLE IF NOT EXISTS debates (id TEXT PRIMARY KEY, case_text TEXT, goals TEXT, constraints TEXT, model TEXT, supplements TEXT, results TEXT, timestamp TEXT, views INTEGER DEFAULT 0)")
+    conn.execute("CREATE TABLE IF NOT EXISTS debates (id TEXT PRIMARY KEY, case_text TEXT, goals TEXT, constraints TEXT, model TEXT, supplements TEXT, results TEXT, timestamp TEXT, views INTEGER DEFAULT 0, feedback TEXT DEFAULT '{}')")
     conn.commit()
     conn.close()
 init_db()
+
+def save_feedback(did, agent, rating):
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute("SELECT feedback FROM debates WHERE id=?", (did,)).fetchone()
+    if not row:
+        conn.close()
+        return
+    fb = json.loads(row[0] or '{}')
+    fb[agent] = rating
+    conn.execute("UPDATE debates SET feedback=? WHERE id=?", (json.dumps(fb), did))
+    conn.commit()
+    conn.close()
+
+def get_feedback(did):
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute("SELECT feedback FROM debates WHERE id=?", (did,)).fetchone()
+    conn.close()
+    return json.loads(row[0] or '{}') if row else {}
 
 def make_id():
     return hashlib.md5(str(time.time()).encode()).hexdigest()[:8]
@@ -188,22 +206,37 @@ with gr.Blocks(title="Health Round Table") as demo:
             with gr.Accordion("❤️ Dr. Heart", open=False):
                 gr.HTML(f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">{avatar_img("dr_heart")}<b>Dr. Heart</b> — Cardiology</div>')
                 dr_out = gr.Markdown("*Waiting*")
+                with gr.Row():
+                    gr.Button("👍", variant="secondary", size="sm").click(fn=lambda did, ag="dr_heart": save_feedback(did, ag, "up") if did else None, inputs=[did_info], outputs=[])
+                    gr.Button("👎", variant="secondary", size="sm").click(fn=lambda did, ag="dr_heart": save_feedback(did, ag, "down") if did else None, inputs=[did_info], outputs=[])
 
             with gr.Accordion("🥑 Nutri", open=False):
                 gr.HTML(f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">{avatar_img("nutri")}<b>Nutri</b> — Functional Nutrition</div>')
                 nu_out = gr.Markdown("*Waiting*")
+                with gr.Row():
+                    gr.Button("👍", variant="secondary", size="sm").click(fn=lambda did, ag="nutri": save_feedback(did, ag, "up") if did else None, inputs=[did_info], outputs=[])
+                    gr.Button("👎", variant="secondary", size="sm").click(fn=lambda did, ag="nutri": save_feedback(did, ag, "down") if did else None, inputs=[did_info], outputs=[])
 
             with gr.Accordion("⏳ Longevity", open=False):
                 gr.HTML(f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">{avatar_img("longevity")}<b>Longevity</b> — Anti-Aging Research</div>')
                 lo_out = gr.Markdown("*Waiting*")
+                with gr.Row():
+                    gr.Button("👍", variant="secondary", size="sm").click(fn=lambda did, ag="longevity": save_feedback(did, ag, "up") if did else None, inputs=[did_info], outputs=[])
+                    gr.Button("👎", variant="secondary", size="sm").click(fn=lambda did, ag="longevity": save_feedback(did, ag, "down") if did else None, inputs=[did_info], outputs=[])
 
             with gr.Accordion("🌿 Holistics", open=False):
                 gr.HTML(f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">{avatar_img("holistics")}<b>Holistics</b> — Integrative Medicine</div>')
                 ho_out = gr.Markdown("*Waiting*")
+                with gr.Row():
+                    gr.Button("👍", variant="secondary", size="sm").click(fn=lambda did, ag="holistics": save_feedback(did, ag, "up") if did else None, inputs=[did_info], outputs=[])
+                    gr.Button("👎", variant="secondary", size="sm").click(fn=lambda did, ag="holistics": save_feedback(did, ag, "down") if did else None, inputs=[did_info], outputs=[])
 
             with gr.Accordion("💊 Medi/Suppi", open=False):
                 gr.HTML(f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">{avatar_img("medi_suppi")}<b>Medi/Suppi</b> — Drug + Supplement Safety</div>')
                 me_out = gr.Markdown("*Waiting*")
+                with gr.Row():
+                    gr.Button("👍", variant="secondary", size="sm").click(fn=lambda did, ag="medi_suppi": save_feedback(did, ag, "up") if did else None, inputs=[did_info], outputs=[])
+                    gr.Button("👎", variant="secondary", size="sm").click(fn=lambda did, ag="medi_suppi": save_feedback(did, ag, "down") if did else None, inputs=[did_info], outputs=[])
 
             gr.Markdown("*Each specialist reads all previous analyses.*")
 
