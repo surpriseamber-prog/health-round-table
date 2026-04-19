@@ -37,7 +37,7 @@ def init_db():
     conn = sqlite3.connect("debates.db")
     conn.execute("""CREATE TABLE IF NOT EXISTS debates (
         id TEXT PRIMARY KEY,
-        case TEXT,
+        case_info TEXT,
         goals TEXT,
         constraints TEXT,
         model TEXT,
@@ -75,7 +75,7 @@ def save_debate(case, goals, constraints, model, supplements, results):
     conn = sqlite3.connect("debates.db")
     conn.execute("""INSERT INTO debates (id,case,goals,constraints,model,supplements,results,timestamp)
         VALUES (?,?,?,?,?,?,?,?)""",
-        (did, case, goals, constraints, model, supplements, json.dumps(results), datetime.now().strftime("%Y-%m-%d %H:%M")))
+        (did, case_info, goals, constraints, model, supplements, json.dumps(results), datetime.now().strftime("%Y-%m-%d %H:%M")))
     conn.commit()
     conn.close()
     return did
@@ -98,7 +98,7 @@ def inc_views(did):
 
 def recent_debates():
     conn = sqlite3.connect("debates.db")
-    cur = conn.execute("SELECT id,case,timestamp,views FROM debates ORDER BY rowid DESC LIMIT 10")
+    cur = conn.execute("SELECT id,case_info,timestamp,views FROM debates ORDER BY rowid DESC LIMIT 10")
     rows = cur.fetchall()
     conn.close()
     return [(r[0], {"case": r[1], "timestamp": r[2], "views": r[3]}) for r in rows]
