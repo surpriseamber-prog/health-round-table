@@ -51,7 +51,7 @@ AVATARS = {
 }
 
 AGENTS = {
-    "synthesizer": {"name": "Synthesizer", "emoji": "🧠", "system": "You are the Synthesizer, a medical professor. You give exactly 3 numbered, bold recommendations. Always remind patients to consult their doctor."},
+    "synthesizer": {"name": "Synthesizer", "emoji": "💡", "system": "You are the Synthesizer, a medical professor. You give exactly 3 numbered, bold recommendations. Always remind patients to consult their doctor."},
     "dr_heart": {"name": "Dr. Heart", "emoji": "❤️", "system": "You are Dr. Heart, a cardiologist. Focus on blood pressure, cholesterol, circulation. Give bullet points."},
     "nutri": {"name": "Nutri", "emoji": "🥑", "system": "You are Nutri, a functional nutritionist. Build on what the previous specialists said. Give bullet points."},
     "longevity": {"name": "Longevity", "emoji": "⏳", "system": "You are Longevity, an anti-aging researcher. Build on what previous specialists said. Give bullet points."},
@@ -217,7 +217,7 @@ A multi-agent AI system where **6 specialist agents** debate your case from diff
 | Longevity | Anti-Aging Research | ⏳ |
 | Holistics | Integrative Medicine | 🌿 |
 | Medi/Suppi | Drug + Supplement Safety | 💊 |
-| Synthesizer | Medical Professor | 🧠 |
+| Synthesizer | Medical Professor | 💡 |
 ### How It Works
 1. Submit your case with age, sex, weight, height, BPM, symptoms, exercise level
 2. Each agent reads all previous analyses — they build on each other
