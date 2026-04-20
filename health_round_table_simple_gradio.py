@@ -39,7 +39,8 @@ BASE_URL = CLOUD_URL  # default; overridden at runtime
 
 if not API_KEY:
     raise ValueError("OLLAMA_API_KEY environment variable is not set")
-headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (compatible; HealthRoundTable/1.0)"}
+
 
 AVATARS = {
     "synthesizer": "https://raw.githubusercontent.com/surpriseamber-prog/health-round-table/main/static/avatars/avatar_synthesizer.jpg",
@@ -152,7 +153,11 @@ def chat(model, system, messages, timeout=60):
     if base == LOCAL_URL:
         kwargs["headers"] = {"Content-Type": "application/json"}
     else:
-        kwargs["headers"] = headers
+        kwargs["headers"] = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (compatible; HealthRoundTable/1.0)"
+        }
     r = requests.post(f"{base}/api/chat", **kwargs)
     if r.status_code != 200:
         raise Exception(f"API Error {r.status_code}: {r.text}")
