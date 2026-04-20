@@ -11,8 +11,22 @@ API_KEY = os.environ.get("OLLAMA_API_KEY", "")
 LOCAL_URL = "http://localhost:11434"
 CLOUD_URL = "https://api.ollama.com"
 
-def get_base_url():
-    """Try local Ollama first; fall back to cloud."""
+# Local models known to be installed
+LOCAL_MODELS = {"qwen2.5:7b"}
+CLOUD_MODELS = {"deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"}
+
+def get_base_url(model=None):
+    """Route to local if available and running, otherwise cloud."""
+    if model in LOCAL_MODELS:
+        try:
+            r = requests.get(f"{LOCAL_URL}/api/tags", timeout=3)
+            if r.status_code == 200:
+                return LOCAL_URL
+        except:
+            pass
+    if model in CLOUD_MODELS or model is None:
+        return CLOUD_URL
+    # Unknown model — try local first, cloud as fallback
     try:
         r = requests.get(f"{LOCAL_URL}/api/tags", timeout=3)
         if r.status_code == 200:
@@ -132,11 +146,10 @@ def feed_html():
     return html
 
 def chat(model, system, messages, timeout=60):
-    base = get_base_url()
+    base = get_base_url(model)
     payload = {"model": model, "messages": [{"role": "system", "content": system}] + messages, "stream": False}
     kwargs = {"timeout": timeout}
     if base == LOCAL_URL:
-        # Local Ollama doesn't need auth
         kwargs["headers"] = {"Content-Type": "application/json"}
     else:
         kwargs["headers"] = headers
@@ -223,7 +236,7 @@ A multi-agent AI system where **6 specialist agents** debate your case from diff
                     goals_input = gr.Textbox(label="Patient Goals", placeholder="e.g. avoid medication, lose 20 lbs...", lines=3)
                     constraints_input = gr.Textbox(label="Constraints / Allergies", placeholder="e.g. on metformin, allergic to penicillin...", lines=3)
                     supplements_input = gr.Textbox(label="Supplements / Medications", placeholder="e.g. magnesium 400mg, fish oil...", lines=3)
-                    model_choice = gr.Dropdown(["deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="AI Model")
+                    model_choice = gr.Dropdown(["qwen2.5:7b", "deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="AI Model")
                     start_btn = gr.Button("Start Round Table", variant="primary")
 
             with gr.Accordion("TLDR — Key Recommendations", open=True):
@@ -308,7 +321,7 @@ A multi-agent AI system where **6 specialist agents** debate your case from diff
                         with gr.Row():
                             send_btn = gr.Button("Send")
                             clear_btn = gr.Button("Clear")
-                        model_sel = gr.Dropdown(["deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="Model")
+                        model_sel = gr.Dropdown(["qwen2.5:7b", "deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="qwen2.5:7b", label="Model")
                         def send_message(msg, history, model):
                             return "", chat_agent(agent_key, msg, history, model)
                         send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
