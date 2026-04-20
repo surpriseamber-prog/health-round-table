@@ -1,5 +1,6 @@
 import gradio as gr
-import requests
+import urllib.request
+import urllib.error
 import time
 import hashlib
 import sqlite3
@@ -149,19 +150,23 @@ def feed_html():
 def chat(model, system, messages, timeout=60):
     base = get_base_url(model)
     payload = {"model": model, "messages": [{"role": "system", "content": system}] + messages, "stream": False}
-    kwargs = {"timeout": timeout}
+    data = json.dumps(payload).encode()
     if base == LOCAL_URL:
-        kwargs["headers"] = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json"}
     else:
-        kwargs["headers"] = {
+        headers = {
             "Authorization": f"Bearer {API_KEY}",
             "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (compatible; HealthRoundTable/1.0)"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-    r = requests.post(f"{base}/api/chat", **kwargs)
-    if r.status_code != 200:
-        raise Exception(f"API Error {r.status_code}: {r.text}")
-    return r.json()["message"]["content"]
+    req = urllib.request.Request(f"{base}/api/chat", data=data, headers=headers, method="POST")
+    try:
+        r = urllib.request.urlopen(req, timeout=timeout)
+        return json.loads(r.read())["message"]["content"]
+    except urllib.error.HTTPError as e:
+        raise Exception(f"API Error {e.code}: {e.read()}")
+    except urllib.error.URLError as e:
+        raise Exception(f"Network Error: {e.reason}")
 
 def run_debate(case, goals, constraints, model_choice, supplements, guest):
     guest_block = f"\n\nOTHER AI PERSPECTIVES:\n{guest}" if guest and guest.strip() else ""
