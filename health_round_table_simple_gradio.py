@@ -18,22 +18,20 @@ CLOUD_MODELS = {"deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minima
 
 def get_base_url(model=None):
     """Route to local if available and running, otherwise cloud."""
-    if model in LOCAL_MODELS:
+    def local_up():
         try:
-            r = requests.get(f"{LOCAL_URL}/api/tags", timeout=3)
-            if r.status_code == 200:
-                return LOCAL_URL
+            req = urllib.request.Request(f"{LOCAL_URL}/api/tags", method="GET")
+            r = urllib.request.urlopen(req, timeout=3)
+            return r.status == 200
         except:
-            pass
+            return False
+    if model in LOCAL_MODELS:
+        if local_up():
+            return LOCAL_URL
     if model in CLOUD_MODELS or model is None:
         return CLOUD_URL
-    # Unknown model — try local first, cloud as fallback
-    try:
-        r = requests.get(f"{LOCAL_URL}/api/tags", timeout=3)
-        if r.status_code == 200:
-            return LOCAL_URL
-    except:
-        pass
+    if local_up():
+        return LOCAL_URL
     return CLOUD_URL
 
 BASE_URL = CLOUD_URL  # default; overridden at runtime
@@ -334,9 +332,16 @@ A multi-agent AI system where **6 specialist agents** debate your case from diff
                             clear_btn = gr.Button("Clear")
                         model_sel = gr.Dropdown(["qwen2.5:7b", "deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="qwen2.5:7b", label="Model")
                         def send_message(msg, history, model):
-                            return "", chat_agent(agent_key, msg, history, model)
+                            if not msg or not msg.strip():
+                                return "", history
+                            try:
+                                response = chat(model, agent["system"], [{"role": "user", "content": m[0]} for m in history] + [{"role": "user", "content": msg}])
+                            except Exception as e:
+                                response = f"⚠️ {str(e)}"
+                            history.append([msg, response])
+                            return "", history
                         send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
                         msg.submit(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
-                        clear_btn.click(fn=lambda: ([], None), outputs=[chatbot, msg])
+                        clear_btn.click(fn=lambda: ("", []), outputs=[msg, chatbot])
 
 demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", 7860)))
