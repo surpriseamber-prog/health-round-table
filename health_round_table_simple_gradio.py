@@ -117,9 +117,9 @@ def feed_html():
     html += "</table>"
     return html
 
-def chat(model, system, messages):
+def chat(model, system, messages, timeout=60):
     payload = {"model": model, "messages": [{"role": "system", "content": system}] + messages, "stream": False}
-    r = requests.post(f"{BASE_URL}/api/chat", headers=headers, json=payload)
+    r = requests.post(f"{BASE_URL}/api/chat", headers=headers, json=payload, timeout=timeout)
     if r.status_code != 200:
         raise Exception(f"API Error {r.status_code}: {r.text}")
     return r.json()["message"]["content"]
@@ -161,9 +161,9 @@ def chat_agent(agent_key, message, history, model):
         return history
     messages = [{"role": "user", "content": m[0]} for m in history] + [{"role": "user", "content": message}]
     try:
-        response = chat(model, agent["system"], messages)
+        response = chat(model, agent["system"], messages, timeout=90)
     except Exception as e:
-        response = f"Error: {str(e)}"
+        response = f"⚠️ {str(e)}"
     history.append((message, response))
     return history
 
