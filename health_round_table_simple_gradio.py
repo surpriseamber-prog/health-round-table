@@ -334,4 +334,4 @@ A multi-agent AI system where **6 specialist agents** debate your case from diff
                         msg.submit(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
                         clear_btn.click(fn=lambda: ([], None), outputs=[chatbot, msg])
 
-demo.launch(server_name="0.0.0.0", server_port=7860)
+demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", 7860)))
