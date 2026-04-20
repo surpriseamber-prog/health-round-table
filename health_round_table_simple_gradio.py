@@ -8,7 +8,21 @@ import os
 from datetime import datetime
 
 API_KEY = os.environ.get("OLLAMA_API_KEY", "")
-BASE_URL = "https://api.ollama.com"
+LOCAL_URL = "http://localhost:11434"
+CLOUD_URL = "https://api.ollama.com"
+
+def get_base_url():
+    """Try local Ollama first; fall back to cloud."""
+    try:
+        r = requests.get(f"{LOCAL_URL}/api/tags", timeout=3)
+        if r.status_code == 200:
+            return LOCAL_URL
+    except:
+        pass
+    return CLOUD_URL
+
+BASE_URL = CLOUD_URL  # default; overridden at runtime
+
 if not API_KEY:
     raise ValueError("OLLAMA_API_KEY environment variable is not set")
 headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
@@ -118,8 +132,15 @@ def feed_html():
     return html
 
 def chat(model, system, messages, timeout=60):
+    base = get_base_url()
     payload = {"model": model, "messages": [{"role": "system", "content": system}] + messages, "stream": False}
-    r = requests.post(f"{BASE_URL}/api/chat", headers=headers, json=payload, timeout=timeout)
+    kwargs = {"timeout": timeout}
+    if base == LOCAL_URL:
+        # Local Ollama doesn't need auth
+        kwargs["headers"] = {"Content-Type": "application/json"}
+    else:
+        kwargs["headers"] = headers
+    r = requests.post(f"{base}/api/chat", **kwargs)
     if r.status_code != 200:
         raise Exception(f"API Error {r.status_code}: {r.text}")
     return r.json()["message"]["content"]
