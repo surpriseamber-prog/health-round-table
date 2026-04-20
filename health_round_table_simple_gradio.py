@@ -208,16 +208,17 @@ with gr.Blocks(title="Health Round Table") as demo:
 
     with gr.Tabs():
         with gr.TabItem("About"):
-            gr.Markdown("""## What is Health Round Table?
+            gr.Markdown(""""## What is Health Round Table?
 A multi-agent AI system where **6 specialist agents** debate your case from different angles — then a Synthesizer delivers a final verdict.
 ### The Agents
 | Agent | Specialty | Emoji |
-| Dr. Heart | Cardiology | ❤️ |
-| Nutri | Functional Nutrition | 🥑 |
-| Longevity | Anti-Aging Research | ⏳ |
-| Holistics | Integrative Medicine | 🌿 |
-| Medi/Suppi | Drug + Supplement Safety | 💊 |
-| Synthesizer | Medical Professor | 💡 |
+|---|---|---|
+| **Dr. Heart** | Cardiology | ❤️ |
+| **Nutri** | Functional Nutrition | 🥑 |
+| **Longevity** | Anti-Aging Research | ⏳ |
+| **Holistics** | Integrative Medicine | 🌿 |
+| **Medi/Suppi** | Drug + Supplement Safety | 💊 |
+| **Synthesizer** | Medical Professor | 💡 |
 ### How It Works
 1. Submit your case with age, sex, weight, height, BPM, symptoms, exercise level
 2. Each agent reads all previous analyses — they build on each other
