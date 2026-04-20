@@ -338,7 +338,8 @@ A multi-agent AI system where **6 specialist agents** debate your case from diff
                                 response = chat(model, agent["system"], [{"role": "user", "content": m[0]} for m in history] + [{"role": "user", "content": msg}])
                             except Exception as e:
                                 response = f"⚠️ {str(e)}"
-                            history.append([msg, response])
+                            history.append({"role": "user", "content": msg})
+                            history.append({"role": "assistant", "content": response})
                             return "", history
                         send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
                         msg.submit(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
