@@ -7,8 +7,10 @@ import json
 import os
 from datetime import datetime
 
-API_KEY = "939d10536ea749c2ac9f1ae783335eaa.L8GP6pNpV7FVESvej9RAoDTT"
+API_KEY = os.environ.get("OLLAMA_API_KEY", "")
 BASE_URL = "https://api.ollama.com"
+if not API_KEY:
+    raise ValueError("OLLAMA_API_KEY environment variable is not set")
 headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 
 AVATARS = {
@@ -70,10 +72,10 @@ def get_feedback(did):
 def make_id():
     return hashlib.sha256(str(time.time()).encode()).hexdigest()[:8]
 
-def save_debate(case, goals, constraints, model, supplements, results):
+def save_debate(case_info, goals, constraints, model, supplements, results):
     did = make_id()
     conn = sqlite3.connect("debates.db")
-    conn.execute("""INSERT INTO debates (id,case,goals,constraints,model,supplements,results,timestamp)
+    conn.execute("""INSERT INTO debates (id,case_info,goals,constraints,model,supplements,results,timestamp)
         VALUES (?,?,?,?,?,?,?,?)""",
         (did, case_info, goals, constraints, model, supplements, json.dumps(results), datetime.now().strftime("%Y-%m-%d %H:%M")))
     conn.commit()
@@ -132,7 +134,6 @@ def run_debate(case, goals, constraints, model_choice, supplements, guest):
         except Exception as e:
             return f"Error: {e}"
 
-    # Sequential yield — each agent updates UI as it completes
     dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nBullet points.", f"Analyze: {case}")
     yield {"dr_heart": dr}
     nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}\nBullet points.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
@@ -172,70 +173,58 @@ with gr.Blocks(title="Health Round Table") as demo:
     gr.Markdown("# Health Round Table\n*Not medical advice — for educational debate only*")
 
     with gr.Tabs():
-        # === ABOUT TAB ===
         with gr.TabItem("About"):
             gr.Markdown("""## What is Health Round Table?
-
 A multi-agent AI system where **6 specialist agents** debate your case from different angles — then a Synthesizer delivers a final verdict.
-
 ### The Agents
-
 | Agent | Specialty | Emoji |
-|-------|-----------|-------|
-| **Dr. Heart** | Cardiology — BP, cholesterol, circulation | ❤️ |
-| **Nutri** | Functional Nutrition | 🥑 |
-| **Longevity** | Anti-Aging Research | ⏳ |
-| **Holistics** | Integrative Medicine | 🌿 |
-| **Medi/Suppi** | Drug + Supplement Safety | 💊 |
-| **Synthesizer** | Medical Professor — Final Recommendations | 🧠 |
-
+| Dr. Heart | Cardiology | ❤️ |
+| Nutri | Functional Nutrition | 🥑 |
+| Longevity | Anti-Aging Research | ⏳ |
+| Holistics | Integrative Medicine | 🌿 |
+| Medi/Suppi | Drug + Supplement Safety | 💊 |
+| Synthesizer | Medical Professor | 🧠 |
 ### How It Works
-
-1. **Submit your case** — include age, sex, weight, height, BPM, symptoms, exercise level
-2. **Each agent reads all previous analyses** — they build on each other, like a real panel
-3. **Medi/Suppi checks** your supplements for interactions
-4. **Synthesizer gives 3 numbered recommendations**
-
+1. Submit your case with age, sex, weight, height, BPM, symptoms, exercise level
+2. Each agent reads all previous analyses — they build on each other
+3. Medi/Suppi checks your supplements for interactions
+4. Synthesizer gives 3 numbered recommendations
 ### Warnings
-
-- ⚠️ **Not medical advice.** Always consult your doctor.
-- This is an educational debate system — use it as a starting point for conversation with your healthcare provider.
-- AI responses are only as good as the information you provide. Be specific and honest.
+⚠️ **Not medical advice.** Always consult your doctor.
 """)
 
-        # === GROUP DEBATE TAB ===
         with gr.TabItem("Group Debate"):
             with gr.Row():
                 with gr.Column(scale=3):
                     case_input = gr.Textbox(label="Patient Case", placeholder="Age: 42\nM/F: F\nWeight: 150 lbs\nHeight: 5'4\"\nBPM: 95\nSymptoms: swollen feet (edema) for 2 weeks, occasional shortness of breath\nExercise level: sedentary, 1 day a week, none\n\nAdditional Details:", lines=8)
-                    guest_input = gr.Textbox(label="Guest Perspectives (paste what other AIs said — Grok, Claude, etc.)", placeholder="Paste any external AI analysis here...", lines=3)
+                    guest_input = gr.Textbox(label="Guest Perspectives (paste what other AIs said)", placeholder="Paste any external AI analysis here...", lines=3)
                 with gr.Column(scale=1):
-                    goals_input = gr.Textbox(label="Patient Goals", placeholder="e.g. avoid medication, lose 20 lbs, get off statins...", lines=3)
+                    goals_input = gr.Textbox(label="Patient Goals", placeholder="e.g. avoid medication, lose 20 lbs...", lines=3)
                     constraints_input = gr.Textbox(label="Constraints / Allergies", placeholder="e.g. on metformin, allergic to penicillin...", lines=3)
-                    supplements_input = gr.Textbox(label="Supplements / Medications", placeholder="e.g. magnesium 400mg, fish oil, vitamin D3 2000IU...", lines=3)
+                    supplements_input = gr.Textbox(label="Supplements / Medications", placeholder="e.g. magnesium 400mg, fish oil...", lines=3)
                     model_choice = gr.Dropdown(["deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="AI Model")
                     start_btn = gr.Button("Start Round Table", variant="primary")
 
             with gr.Accordion("TLDR — Key Recommendations", open=True):
                 tldr_output = gr.Markdown("*Results appear here*")
 
-            with gr.Accordion("Dr. Heart", open=False):
+            with gr.Accordion("❤️ Dr. Heart", open=False):
                 gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("dr_heart") + '<b>Dr. Heart</b> — Cardiology</div>')
                 dr_out = gr.Markdown("*Waiting*")
 
-            with gr.Accordion("Nutri", open=False):
+            with gr.Accordion("🥑 Nutri", open=False):
                 gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("nutri") + '<b>Nutri</b> — Functional Nutrition</div>')
                 nu_out = gr.Markdown("*Waiting*")
 
-            with gr.Accordion("Longevity", open=False):
+            with gr.Accordion("⏳ Longevity", open=False):
                 gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("longevity") + '<b>Longevity</b> — Anti-Aging Research</div>')
                 lo_out = gr.Markdown("*Waiting*")
 
-            with gr.Accordion("Holistics", open=False):
+            with gr.Accordion("🌿 Holistics", open=False):
                 gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("holistics") + '<b>Holistics</b> — Integrative Medicine</div>')
                 ho_out = gr.Markdown("*Waiting*")
 
-            with gr.Accordion("Medi/Suppi", open=False):
+            with gr.Accordion("💊 Medi/Suppi", open=False):
                 gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("medi_suppi") + '<b>Medi/Suppi</b> — Drug + Supplement Safety</div>')
                 me_out = gr.Markdown("*Waiting*")
 
@@ -287,15 +276,14 @@ A multi-agent AI system where **6 specialist agents** debate your case from diff
             load_btn.click(fn=on_load, inputs=[did_input],
                           outputs=[did_info, tldr_output, dr_out, nu_out, lo_out, ho_out, me_out, gr.HTML(), feed_out])
 
-        # === INDIVIDUAL CHAT TABS ===
         with gr.TabItem("Chat Individually"):
-            gr.Markdown("### Chat one-on-one with any agent. Your conversation is saved for this session.")
+            gr.Markdown("### Chat one-on-one with any agent.")
             with gr.Tabs():
                 for agent_key, agent in AGENTS.items():
                     with gr.TabItem(f"{agent['emoji']} {agent['name']}"):
                         gr.HTML(f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">{avatar_img(agent_key, 48)}<span style="font-size:1.2em;"><b>{agent["name"]}</b> {agent["emoji"]}</span></div>')
                         chatbot = gr.Chatbot(label=agent["name"], height=300)
-                        msg = gr.Textbox(label=f"Message {agent['name']}", placeholder=f"Ask {agent['name']} anything...", lines=2)
+                        msg = gr.Textbox(label=f"Message {agent['name']}", placeholder="Type a message...", lines=2)
                         with gr.Row():
                             send_btn = gr.Button("Send")
                             clear_btn = gr.Button("Clear")
