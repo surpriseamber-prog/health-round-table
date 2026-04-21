@@ -312,4 +312,124 @@ No waiting rooms. No 3-week specialist waits. No 15-minute rushed appointments.
 
 ### Not Medical Advice ⚠️
 Health Round Table is for educational discussion only. Always consult your doctor before making health decisions.
-""")
+"""
+
+        with gr.TabItem("Group Debate"):
+            with gr.Row():
+                with gr.Column(scale=3):
+                    case_input = gr.Textbox(label="Patient Case", placeholder="Age: 42\nM/F: F\nWeight: 150 lbs\nHeight: 5'4"\nBPM: 95\nSymptoms: swollen feet (edema) for 2 weeks, occasional shortness of breath\nExercise level: sedentary, 1 day a week, none\n\nAdditional Details:", lines=8)
+                    guest_input = gr.Textbox(label="Guest Perspectives (paste what other AIs said)", placeholder="Paste any external AI analysis here...", lines=3)
+                with gr.Column(scale=1):
+                    goals_input = gr.Textbox(label="Patient Goals", placeholder="e.g. avoid medication, lose 20 lbs...", lines=3)
+                    constraints_input = gr.Textbox(label="Constraints / Allergies", placeholder="e.g. on metformin, allergic to penicillin...", lines=3)
+                    supplements_input = gr.Textbox(label="Supplements / Medications", placeholder="e.g. magnesium 400mg, fish oil...", lines=3)
+                    model_choice = gr.Dropdown(["deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="AI Model")
+                    start_btn = gr.Button("Start Round Table", variant="primary")
+
+            with gr.Accordion("TLDR — Key Recommendations", open=True):
+                tldr_output = gr.Markdown("*Results appear here*")
+
+            with gr.Accordion("❤ Dr. Heart", open=False):
+                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("dr_heart") + '<b>Dr. Heart</b> — Cardiology</div>')
+                dr_out = gr.Markdown("*Waiting*")
+
+            with gr.Accordion("🥑 Nutri", open=False):
+                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("nutri") + '<b>Nutri</b> — Functional Nutrition</div>')
+                nu_out = gr.Markdown("*Waiting*")
+
+            with gr.Accordion("⏳ Longevity", open=False):
+                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("longevity") + '<b>Longevity</b> — Anti-Aging Research</div>')
+                lo_out = gr.Markdown("*Waiting*")
+
+            with gr.Accordion("🌿 Holistics", open=False):
+                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("holistics") + '<b>Holistics</b> — Integrative Medicine</div>')
+                ho_out = gr.Markdown("*Waiting*")
+
+            gr.Markdown("*Each specialist reads all previous analyses.*")
+
+            gr.Markdown("---")
+            gr.Markdown("### Load a Saved Debate")
+            with gr.Row():
+                load_input = gr.Textbox(label="Debate ID", placeholder="Enter debate ID...", lines=1)
+                load_btn = gr.Button("Load Debate", size="sm")
+            load_output = gr.Markdown("*No debate loaded*")
+
+            gr.Markdown("---")
+            gr.Markdown("### Recent Debates")
+            gr.HTML(feed_html())
+
+            status_box = gr.HTML("<em>Ready</em>")
+
+            def on_start(case, goals, constraints, supplements, model_sel, guest):
+                if not case or not case.strip():
+                    yield {"msg": "Please enter a case study.", "tldr": "*Please enter a case*", "dr": "*Waiting*", "nu": "*Waiting*", "lo": "*Waiting*", "ho": "*Waiting*", "status": "❌ Enter a case study"}
+                    return
+                yield {"msg": "Processing...", "tldr": "*Processing — running agents...*", "dr": "⏳ Running Dr. Heart...", "nu": "⏳ Running Nutri...", "lo": "⏳ Running Longevity...", "ho": "⏳ Running Holistics...", "status": "⏳ Processing — this takes 2-3 minutes..."}
+                try:
+                    for update in run_debate(case, goals, constraints, model_sel, supplements, guest):
+                        dr_text = update.get("dr_heart", "")
+                        nu_text = update.get("nutri", "")
+                        lo_text = update.get("longevity", "")
+                        ho_text = update.get("holistics", "")
+                        tldr_text = update.get("synthesizer", "")
+                        yield {
+                            "msg": "✅ Complete!",
+                            "tldr": f"**Synthesizer Recommendations:**\n{tldr_text}\n\n**Key Takeaways:**\n{dr_text[:200]}..." if tldr_text else "*Complete*",
+                            "dr": f"✅ Dr. Heart:\n{dr_text}" if dr_text else "⏳",
+                            "nu": f"✅ Nutri:\n{nu_text}" if nu_text else "⏳",
+                            "lo": f"✅ Longevity:\n{lo_text}" if lo_text else "⏳",
+                            "ho": f"✅ Holistics:\n{ho_text}" if ho_text else "⏳",
+                            "status": "✅ All specialists done!"
+                        }
+                except Exception as e:
+                    yield {"msg": f"Error: {str(e)}", "tldr": f"*Error: {str(e)}*", "dr": "*Error*", "nu": "*Error*", "lo": "*Error*", "ho": "*Error*", "status": f"❌ Error: {str(e)}"}
+
+            def on_load(did):
+                d = load_debate(did)
+                if not d:
+                    return f"*Debate {did} not found*", gr.update()
+                inc_views(did)
+                r = d["results"]
+                tldr = r.get("synthesizer", "")
+                return (
+                    f"**Loaded Debate {did} from {d['timestamp']}**\n\n"
+                    f"**Synthesizer:**\n{tldr}\n\n"
+                    f"**Dr. Heart:** {r.get('dr_heart','')[:300]}...\n\n"
+                    f"**Nutri:** {r.get('nutri','')[:300]}...\n\n"
+                    f"**Longevity:** {r.get('longevity','')[:300]}...",
+                    gr.update(open=True)
+                )
+
+            start_btn.click(fn=on_start, inputs=[case_input, goals_input, constraints_input, supplements_input, model_choice, guest_input],
+                           outputs=[status_box, tldr_output, dr_out, nu_out, lo_out, ho_out])
+            load_btn.click(fn=on_load, inputs=[load_input], outputs=[load_output])
+
+        with gr.TabItem("Chat Individually"):
+            agent_keys = ["dr_heart", "nutri", "longevity", "holistics", "medi_suppi", "synthesizer"]
+            agent_names = ["Dr. Heart", "Nutri", "Longevity", "Holistics", "Medi/Suppi", "Synthesizer"]
+            with gr.Tabs() as individual_tabs:
+                for i, (akey, aname) in enumerate(zip(agent_keys, agent_names)):
+                    with gr.TabItem(aname):
+                        agent = AGENTS[akey]
+                        gr.HTML(f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">{avatar_img(akey, 48)}<span style="font-size:1.2em;"><b>{agent["name"]}</b> {agent["emoji"]}</span></div>')
+                        chatbot = gr.Chatbot(label=agent["name"], height=300)
+                        msg = gr.Textbox(label=f"Message {agent['name']}", placeholder="Type a message...", lines=2)
+                        with gr.Row():
+                            send_btn = gr.Button("Send")
+                            clear_btn = gr.Button("Clear")
+                        model_sel = gr.Dropdown(["deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="Model")
+                        def send_message(msg, history, model):
+                            if not msg or not msg.strip():
+                                return "", history
+                            try:
+                                response = chat(model, agent["system"], [{"role": "user", "content": m[0]} for m in history] + [{"role": "user", "content": msg}])
+                            except Exception as e:
+                                response = f"⚠️ {str(e)}"
+                            history.append({"role": "user", "content": msg})
+                            history.append({"role": "assistant", "content": response})
+                            return "", history
+                        send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
+                        msg.submit(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
+                        clear_btn.click(fn=lambda: ("", []), outputs=[msg, chatbot])
+
+demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", 7860)))
