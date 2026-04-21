@@ -220,23 +220,29 @@ with gr.Blocks(title="Health Round Table") as demo:
     with gr.Tabs():
         with gr.TabItem("About"):
             gr.Markdown(""""## What is Health Round Table?
-A multi-agent AI system where **6 specialist agents** debate your case from different angles — then a Synthesizer delivers a final verdict.
-### The Agents
-| Agent | Specialty | Emoji |
-|---|---|---|
-| **Dr. Heart** | Cardiology | ❤️ |
-| **Nutri** | Functional Nutrition | 🥑 |
-| **Longevity** | Anti-Aging Research | ⏳ |
-| **Holistics** | Integrative Medicine | 🌿 |
-| **Medi/Suppi** | Drug + Supplement Safety | 💊 |
-| **Synthesizer** | Medical Professor | 💡 |
+**6 specialist doctors review your health case together — then agree on what matters most.**
+
+### The Team
+| | |
+|---|---|
+| **Dr. Heart** ❤️ | Cardiology — blood pressure, cholesterol, circulation |
+| **Nutri** 🥑 | Functional Nutrition — food, supplements, gut health |
+| **Longevity** ⏳ | Anti-Aging Research — longevity science, biomarkers |
+| **Holistics** 🌿 | Integrative Medicine — whole-body approaches |
+| **Medi/Suppi** 💊 | Drug + Supplement Safety — interactions, contraindications |
+| **Synthesizer** 💡 | Medical Professor — final recommendations |
+
 ### How It Works
-1. Submit your case with age, sex, weight, height, BPM, symptoms, exercise level
-2. Each agent reads all previous analyses — they build on each other
-3. Medi/Suppi checks your supplements for interactions
-4. Synthesizer gives 3 numbered recommendations
-### Warnings
-⚠️ **Not medical advice.** Always consult your doctor.
+1. **Submit your case** — age, sex, weight, height, symptoms, medications
+2. **Each specialist reads what the others said** — they build on each other, not repeat
+3. **Medi/Suppi reviews your supplements** for conflicts or concerns
+4. **Synthesizer delivers 3 clear recommendations** — ranked by priority
+
+### Who It Is For
+People who want a thorough, multi-angle health review without waiting for appointments. Useful for second opinions, complex cases, or anyone managing multiple health concerns.
+
+### Not Medical Advice ⚠️
+Always consult your doctor. Health Round Table is for educational discussion only.
 """)
 
         with gr.TabItem("Group Debate"):
