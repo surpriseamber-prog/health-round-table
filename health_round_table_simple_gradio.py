@@ -18,6 +18,9 @@ CLOUD_MODELS = {"deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minima
 
 def get_base_url(model=None):
     """Route to local if available and running, otherwise cloud."""
+    # Render sets PORT env var — never attempt local Ollama on server
+    if os.environ.get("PORT"):
+        return CLOUD_URL
     def local_up():
         try:
             req = urllib.request.Request(f"{LOCAL_URL}/api/tags", method="GET")
