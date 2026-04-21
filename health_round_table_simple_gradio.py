@@ -333,7 +333,7 @@ A multi-agent AI system where **6 specialist agents** debate your case from diff
                         with gr.Row():
                             send_btn = gr.Button("Send")
                             clear_btn = gr.Button("Clear")
-                        model_sel = gr.Dropdown(["qwen2.5:7b", "deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="qwen2.5:7b", label="Model")
+                        model_sel = gr.Dropdown(["deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="Model")
                         def send_message(msg, history, model):
                             if not msg or not msg.strip():
                                 return "", history
