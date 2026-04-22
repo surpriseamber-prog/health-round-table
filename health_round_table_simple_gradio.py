@@ -451,7 +451,6 @@ Health Round Table is for educational discussion only. Always consult your docto
                     with gr.TabItem(f"{agent['emoji']} {agent['name']}"):
                         gr.HTML(f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">{avatar_img(agent_key, 48)}<span style="font-size:1.2em;"><b>{agent["name"]}</b> {agent["emoji"]}</span></div>')
                         chatbot = gr.Chatbot(label=agent["name"], height=300)
-                        history_state = gr.State([])
                         msg = gr.Textbox(label=f"Message {agent['name']}", placeholder="Type a message...", lines=2)
                         with gr.Row():
                             send_btn = gr.Button("Send")
@@ -459,18 +458,17 @@ Health Round Table is for educational discussion only. Always consult your docto
                         model_sel = gr.Dropdown(["deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="Model")
                         def send_message(msg, history, model, _agent=agent):
                             if not msg or not msg.strip():
-                                return "", history
+                                return "", [[]]
                             try:
                                 response = chat(model, _agent["system"], [{"role": "user", "content": m[0]} for m in history] + [{"role": "user", "content": msg}])
                             except Exception as e:
-                                response = f"⚠️ {str(e)}"
-                            history.append({"role": "user", "content": msg})
-                            history.append({"role": "assistant", "content": response})
-                            return "", history
-                        def clear_history():
-                            return "", []
-                        send_btn.click(fn=send_message, inputs=[msg, history_state, model_sel], outputs=[msg, chatbot, history_state])
-                        msg.submit(fn=send_message, inputs=[msg, history_state, model_sel], outputs=[msg, chatbot, history_state])
-                        clear_btn.click(fn=clear_history, inputs=[], outputs=[msg, chatbot, history_state])
+                                response = f"Error: {str(e)}"
+                            # history comes in as [[user_msg, assistant_msg], ...]
+                            pairs = [p for p in history if len(p) == 2]
+                            pairs.append([msg, response])
+                            return "", pairs
+                        send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
+                        msg.submit(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
+                        clear_btn.click(fn=lambda: ("", []), outputs=[msg, chatbot])
 
 demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", 7860)))
