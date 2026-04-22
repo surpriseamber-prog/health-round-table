@@ -459,17 +459,34 @@ Health Round Table is for educational discussion only. Always consult your docto
                         def send_message(msg, history, model, _agent=agent):
                             if not msg or not msg.strip():
                                 return "", history
+                            # Build message list from history (supports ChatMessage objects, dicts, lists)
+                            msgs = []
+                            if history:
+                                for item in history:
+                                    if isinstance(item, (list, tuple)):
+                                        # Gradio v6 list of lists: [[user, assistant], ...]
+                                        msgs.append({"role": "user", "content": str(item[0])})
+                                        if len(item) > 1 and item[1]:
+                                            msgs.append({"role": "assistant", "content": str(item[1])})
+                                    elif isinstance(item, dict):
+                                        role = item.get("role", "user")
+                                        content = item.get("content", "")
+                                        msgs.append({"role": role, "content": str(content)})
+                                    elif hasattr(item, "content"):
+                                        role = getattr(item, "role", "user")
+                                        content = str(item.content)
+                                        msgs.append({"role": role, "content": content})
+                                    else:
+                                        msgs.append({"role": "user", "content": str(item)})
+                            # Append new user message
+                            msgs.append({"role": "user", "content": msg})
                             try:
-                                msgs = []
-                                for idx, m in enumerate(history):
-                                    role = "user" if idx % 2 == 0 else "assistant"
-                                    content = m[0] if isinstance(m, (list, tuple)) else m
-                                    msgs.append({"role": role, "content": content})
-                                msgs.append({"role": "user", "content": msg})
                                 response = chat(model, _agent["system"], msgs)
                             except Exception as e:
                                 response = f"Error: {str(e)}"
                             history.append([msg, response])
+                            return "", history
+
                             return "", history
 
                         send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
