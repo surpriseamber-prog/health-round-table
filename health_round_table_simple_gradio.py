@@ -456,11 +456,11 @@ Health Round Table is for educational discussion only. Always consult your docto
                             send_btn = gr.Button("Send")
                             clear_btn = gr.Button("Clear")
                         model_sel = gr.Dropdown(["deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="Model")
-                        def send_message(msg, history, model):
+                        def send_message(msg, history, model, _agent=agent):
                             if not msg or not msg.strip():
                                 return "", history
                             try:
-                                response = chat(model, agent["system"], [{"role": "user", "content": m[0]} for m in history] + [{"role": "user", "content": msg}])
+                                response = chat(model, _agent["system"], [{"role": "user", "content": m[0]} for m in history] + [{"role": "user", "content": msg}])
                             except Exception as e:
                                 response = f"⚠️ {str(e)}"
                             history.append({"role": "user", "content": msg})
