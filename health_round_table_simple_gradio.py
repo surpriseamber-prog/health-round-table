@@ -54,12 +54,12 @@ AVATARS = {
 }
 
 AGENTS = {
-    "synthesizer": {"name": "Synthesizer", "emoji": "💡", "system": "You are the Synthesizer, a medical professor. You give exactly 3 numbered, bold recommendations. Always remind patients to consult their doctor."},
-    "dr_heart": {"name": "Dr. Heart", "emoji": "❤️", "system": "You are Dr. Heart, a cardiologist. Focus on blood pressure, cholesterol, circulation. Give bullet points."},
-    "nutri": {"name": "Nutri", "emoji": "🥑", "system": "You are Nutri, a functional nutritionist. Build on what the previous specialists said. Give bullet points."},
-    "longevity": {"name": "Longevity", "emoji": "⏳", "system": "You are Longevity, an anti-aging researcher. Build on what previous specialists said. Give bullet points."},
-    "holistics": {"name": "Holistics", "emoji": "🌿", "system": "You are Holistics, an integrative medicine specialist. Build on what previous specialists said. Give bullet points."},
-    "medi_suppi": {"name": "Medi/Suppi", "emoji": "💊", "system": "You are Medi/Suppi, a pharmacology and supplement safety specialist. Give 3 sections: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE. Always remind: 'Consult your doctor or pharmacist.'"},
+    "synthesizer": {"name": "Synthesizer", "emoji": "💡", "system": "You are the Synthesizer, a medical professor. Give exactly 3 numbered, bold recommendations. Keep to 150 words max. Bullet points preferred. Always remind patients to consult their doctor."},
+    "dr_heart": {"name": "Dr. Heart", "emoji": "❤️", "system": "You are Dr. Heart, a cardiologist. Focus on blood pressure, cholesterol, circulation. Keep to 150 words max. Bullet points only — no full paragraphs."},
+    "nutri": {"name": "Nutri", "emoji": "🥑", "system": "You are Nutri, a functional nutritionist. Build on what the previous specialists said. Keep to 150 words max. Bullet points only — no full paragraphs."},
+    "longevity": {"name": "Longevity", "emoji": "⏳", "system": "You are Longevity, an anti-aging researcher. Build on what previous specialists said. Keep to 150 words max. Bullet points only — no full paragraphs."},
+    "holistics": {"name": "Holistics", "emoji": "🌿", "system": "You are Holistics, an integrative medicine specialist. Build on what previous specialists said. Keep to 150 words max. Bullet points only — no full paragraphs."},
+    "medi_suppi": {"name": "Medi/Suppi", "emoji": "💊", "system": "You are Medi/Suppi, a pharmacology and supplement safety specialist. Keep to 150 words max. Give 3 sections: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE. Bullet points preferred. Always remind: 'Consult your doctor or pharmacist.'"},
 }
 
 def avatar_img(key, size=40):
@@ -287,19 +287,19 @@ def run_debate(case, goals, constraints, model_choice, supplements, guest):
         except Exception as e:
             return f"Error: {e}"
 
-    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nBullet points.", f"Analyze: {case}")
+    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nKeep to 150 words max. Bullet points only.", f"Analyze: {case}")
     yield {"dr_heart": dr}
-    nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}\nBullet points.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
+    nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}\nKeep to 150 words max. Bullet points only.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
     yield {"dr_heart": dr, "nutri": nu}
-    lo = ask(f"You are Longevity, anti-aging researcher.{ctx}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
+    lo = ask(f"You are Longevity, anti-aging researcher.{ctx}\nKeep to 150 words max. Bullet points only.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo}
-    ho = ask(f"You are Holistics, integrative medicine.{ctx}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
+    ho = ask(f"You are Holistics, integrative medicine.{ctx}\nKeep to 150 words max. Bullet points only.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho}
-    sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations.{ctx}",
-            f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
+    sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations. Keep to 150 words max. Bullet points.{ctx}",
+             f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy}
     if supplements and supplements.strip():
-        me = ask("You are Medi/Suppi, pharmacology safety specialist.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'",
+        me = ask("You are Medi/Suppi, pharmacology safety specialist.\nKeep to 150 words max.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'",
                 f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
     else:
         me = "No supplements listed."
