@@ -460,11 +460,11 @@ Health Round Table is for educational discussion only. Always consult your docto
                             if not msg or not msg.strip():
                                 return "", history
                             try:
-                                response = chat(model, _agent["system"], [{"role": "user", "content": m[0]} for m in history] + [{"role": "user", "content": msg}])
+                                msgs = [{"role": "user", "content": m[0]} for m in history] + [{"role": "user", "content": msg}]
+                                response = chat(model, _agent["system"], msgs)
                             except Exception as e:
-                                response = f"⚠️ {str(e)}"
-                            history.append({"role": "user", "content": msg})
-                            history.append({"role": "assistant", "content": response})
+                                response = f"Error: {str(e)}"
+                            history.append([msg, response])
                             return "", history
                         send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
                         msg.submit(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
