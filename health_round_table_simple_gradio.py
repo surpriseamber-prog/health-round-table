@@ -218,9 +218,9 @@ def get_pubmed_query(agent_key, case_text):
     queries = {
         "dr_heart": "blood pressure cardiovascular cholesterol 2025",
         "nutri": "nutrition diet metabolic supplements 2025",
-        "longevity": "longevity aging anti-aging biomarkers 2025",
-        "holistics": "integrative medicine whole-body approach 2025",
-        "medi_suppi": "drug supplement interactions safety 2025",
+        "longevity": "stem cell therapy anti-aging longevity rejuvenation 2025",
+        "holistics": "integrative medicine naturopathy herbal aromatherapy 2025",
+        "medi_suppi": "drug supplement interactions safety pharmacology 2025",
     }
     return queries.get(agent_key, case_text)
 
