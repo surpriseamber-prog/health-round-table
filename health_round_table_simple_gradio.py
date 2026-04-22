@@ -168,6 +168,114 @@ def chat(model, system, messages, timeout=60):
         raise Exception(f"API Error {e.code}: {e.read()}")
     except urllib.error.URLError as e:
         raise Exception(f"Network Error: {e.reason}")
+def fetch_pubmed_research(query, max_results=3):
+    """Fetch recent PubMed studies for a given query. Returns formatted research string."""
+    try:
+        encoded_query = urllib.parse.quote(query)
+        search_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={encoded_query}&retmode=json&retmax={max_results}&sort=relevance&reldate=365"
+        req = urllib.request.Request(search_url)
+        req.add_header("User-Agent", "Mozilla/5.0 (compatible; HealthRoundTable/1.0)")
+        with urllib.request.urlopen(req, timeout=15) as response:
+            search_result = json.loads(response.read())
+        ids = search_result.get("esearchresult", {}).get("idlist", [])
+        if not ids:
+            return ""
+        ids_str = ",".join(ids)
+        summary_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={ids_str}&retmode=json"
+        req2 = urllib.request.Request(summary_url)
+        req2.add_header("User-Agent", "Mozilla/5.0 (compatible; HealthRoundTable/1.0)")
+        with urllib.request.urlopen(req2, timeout=15) as response:
+            summary_result = json.loads(response.read())
+        lines = ["", "[RECENT RESEARCH FROM PUBMED]", "=" * 40]
+        result_data = summary_result.get("result", {})
+        for uid in ids:
+            article = result_data.get(uid, {})
+            title = article.get("title", "Unknown title")
+            pubdate = article.get("pubdate", "Unknown date")
+            source = article.get("source", "Unknown journal")
+            authors = article.get("authors", [])
+            author_names = [a.get("name", "") for a in authors[:3]]
+            author_str = ", ".join([n for n in author_names if n])
+            if len(authors) > 3:
+                author_str += " et al."
+            articleids = article.get("articleids", [])
+            doi = ""
+            for ai in articleids:
+                if ai.get("idtype") == "doi":
+                    doi = ai.get("value", "")
+                    break
+            lines.append(f"\n• {title}")
+            lines.append(f"  {author_str} | {pubdate} | {source}")
+            if doi:
+                lines.append(f"  DOI: https://doi.org/{doi}")
+        lines.append("=" * 40)
+        return "\n".join(lines)
+    except Exception as e:
+        return f"\n[PubMed error: {str(e)}]"
+
+def get_pubmed_query(agent_key, case_text):
+    """Map agent to a PubMed search query based on case context."""
+    queries = {
+        "dr_heart": "blood pressure cardiovascular cholesterol 2025",
+        "nutri": "nutrition diet metabolic supplements 2025",
+        "longevity": "longevity aging anti-aging biomarkers 2025",
+        "holistics": "integrative medicine whole-body approach 2025",
+        "medi_suppi": "drug supplement interactions safety 2025",
+    }
+    return queries.get(agent_key, case_text)
+
+def chat(model, system, messages, timeout=60):
+    base = get_base_url(model)
+    payload = {"model": model, "messages": [{"role": "system", "content": system}] + messages, "stream": False}
+    data = json.dumps(payload).encode()
+    if base == LOCAL_URL:
+        hdrs = {"Content-Type": "application/json"}
+    else:
+        hdrs = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    req = urllib.request.Request(f"{base}/api/chat", data=data, headers=hdrs, method="POST")
+    try:
+        r = urllib.request.urlopen(req, timeout=timeout)
+        return json.loads(r.read())["message"]["content"]
+    except urllib.error.HTTPError as e:
+        raise Exception(f"API Error {e.code}: {e.read()}")
+    except urllib.error.URLError as e:
+        raise Exception(f"Network Error: {e.reason}")
+
+def run_debate(case, goals, constraints, model_choice, supplements, guest):
+    guest_block = f"\n\nOTHER AI PERSPECTIVES:\n{guest}" if guest and guest.strip() else ""
+    ctx = (f"\n\nPATIENT GOALS:\n{goals}" if goals else "") + (f"\n\nIMPORTANT CONSTRAINTS:\n{constraints}" if constraints else "") + guest_block
+
+    def ask(sys, prompt):
+        try:
+            return chat(model_choice, sys, [{"role": "user", "content": prompt}])
+        except Exception as e:
+            return f"Error: {e}"
+
+    dr_research = fetch_pubmed_research(get_pubmed_query("dr_heart", case), max_results=3)
+    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}{dr_research}\nBullet points.", f"Analyze: {case}")
+    yield {"dr_heart": dr}
+    nu_research = fetch_pubmed_research(get_pubmed_query("nutri", case), max_results=3)
+    nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}{nu_research}\nBullet points.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
+    yield {"dr_heart": dr, "nutri": nu}
+    lo_research = fetch_pubmed_research(get_pubmed_query("longevity", case), max_results=3)
+    lo = ask(f"You are Longevity, anti-aging researcher.{ctx}{lo_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
+    yield {"dr_heart": dr, "nutri": nu, "longevity": lo}
+    ho_research = fetch_pubmed_research(get_pubmed_query("holistics", case), max_results=3)
+    ho = ask(f"You are Holistics, integrative medicine.{ctx}{ho_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
+    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho}
+    sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations.{ctx}",
+            f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
+    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy}
+    if supplements and supplements.strip():
+        me_research = fetch_pubmed_research(get_pubmed_query("medi_suppi", case), max_results=3)
+        me = ask("You are Medi/Suppi, pharmacology safety specialist.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'{me_research}",
+                f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
+    else:
+        me = "No supplements listed."
+    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy, "medi_suppi": me}
+    results = {"synthesizer": sy, "dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "medi_suppi": me}
+    did = save_debate(case, goals, constraints, model_choice, supplements, results)
+    return results, did, f"https://health-round-table.com/?id={did}"
 
 def run_debate(case, goals, constraints, model_choice, supplements, guest):
     guest_block = f"\n\nOTHER AI PERSPECTIVES:\n{guest}" if guest and guest.strip() else ""
