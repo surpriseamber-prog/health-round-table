@@ -252,7 +252,7 @@ def run_debate(case, goals, constraints, model_choice, supplements, guest):
             return f"Error: {e}"
 
     dr_research = fetch_pubmed_research(get_pubmed_query("dr_heart", case), max_results=3)
-    dr = ask(f"You are Dr. Heart, cardiologist. Anchor in Peter Attia and Dr. Ronesh (cardiovascular optimization, apoB, LP(a), advanced lipid testing, longevity cardiology). Focus on BP, cholesterol, circulation.{ctx}\nKeep to 200 words max. Bullet points only.{dr_research}", f"Analyze: {case}")
+    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nKeep to 200 words max. Bullet points only.{dr_research}\nBullet points.", f"Analyze: {case}")
     yield {"dr_heart": dr}
     nu_research = fetch_pubmed_research(get_pubmed_query("nutri", case), max_results=3)
     nu = ask(f"You are Nutri, functional nutritionist. Anchor in Rhonda Patrick and Dr. Chris Palmer (functional nutrition, methylation, gut-brain axis, metabolic health). Build on Dr. Heart's foundation.{ctx}\nKeep to 200 words max. Bullet points only.{nu_research}", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
@@ -277,6 +277,36 @@ def run_debate(case, goals, constraints, model_choice, supplements, guest):
     did = save_debate(case, goals, constraints, model_choice, supplements, results)
     return results, did, f"https://health-round-table.com/?id={did}"
 
+def run_debate(case, goals, constraints, model_choice, supplements, guest):
+    guest_block = f"\n\nOTHER AI PERSPECTIVES:\n{guest}" if guest and guest.strip() else ""
+    ctx = (f"\n\nPATIENT GOALS:\n{goals}" if goals else "") + (f"\n\nIMPORTANT CONSTRAINTS:\n{constraints}" if constraints else "") + guest_block
+
+    def ask(sys, prompt):
+        try:
+            return chat(model_choice, sys, [{"role": "user", "content": prompt}])
+        except Exception as e:
+            return f"Error: {e}"
+
+    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nKeep to 150 words max. Bullet points only.", f"Analyze: {case}")
+    yield {"dr_heart": dr}
+    nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}\nKeep to 150 words max. Bullet points only.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
+    yield {"dr_heart": dr, "nutri": nu}
+    lo = ask(f"You are Longevity, anti-aging researcher.{ctx}\nKeep to 150 words max. Bullet points only.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
+    yield {"dr_heart": dr, "nutri": nu, "longevity": lo}
+    ho = ask(f"You are Holistics, integrative medicine.{ctx}\nKeep to 150 words max. Bullet points only.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
+    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho}
+    sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations. Keep to 150 words max. Bullet points.{ctx}",
+             f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
+    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy}
+    if supplements and supplements.strip():
+        me = ask("You are Medi/Suppi, pharmacology safety specialist.\nKeep to 150 words max.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'",
+                f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
+    else:
+        me = "No supplements listed."
+    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy, "medi_suppi": me}
+    results = {"synthesizer": sy, "dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "medi_suppi": me}
+    did = save_debate(case, goals, constraints, model_choice, supplements, results)
+    return results, did, f"https://health-round-table.com/?id={did}"
 
 def chat_agent(agent_key, message, history, model):
     agent = AGENTS[agent_key]
@@ -456,7 +486,6 @@ Health Round Table is for educational discussion only. Always consult your docto
                                 response = f"Error: {str(e)}"
                             history.append([msg, response])
                             return "", history
-
 
                         send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
                         msg.submit(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
