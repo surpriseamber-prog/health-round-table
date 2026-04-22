@@ -1,6 +1,5 @@
 import gradio as gr
 import urllib.request
-import urllib.parse
 import urllib.error
 import time
 import hashlib
@@ -13,11 +12,13 @@ API_KEY = os.environ.get("OLLAMA_API_KEY", "")
 LOCAL_URL = "http://localhost:11434"
 CLOUD_URL = "https://api.ollama.com"
 
+# Local models known to be installed
 LOCAL_MODELS = {"qwen2.5:7b"}
 CLOUD_MODELS = {"deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"}
 
 def get_base_url(model=None):
     """Route to local if available and running, otherwise cloud."""
+    # Render sets PORT env var — never attempt local Ollama on server
     if os.environ.get("PORT"):
         return CLOUD_URL
     def local_up():
@@ -36,11 +37,12 @@ def get_base_url(model=None):
         return LOCAL_URL
     return CLOUD_URL
 
-BASE_URL = CLOUD_URL
+BASE_URL = CLOUD_URL  # default; overridden at runtime
 
 if not API_KEY:
     raise ValueError("OLLAMA_API_KEY environment variable is not set")
 headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (compatible; HealthRoundTable/1.0)"}
+
 
 AVATARS = {
     "synthesizer": "https://raw.githubusercontent.com/surpriseamber-prog/health-round-table/main/static/avatars/avatar_synthesizer.jpg",
@@ -52,12 +54,12 @@ AVATARS = {
 }
 
 AGENTS = {
-    "synthesizer": {"name": "Synthesizer", "emoji": "💡", "system": "You are the Synthesizer, a medical professor. Start your response with: '3 QUICK, FREE WINS YOU CAN START TODAY:' then list 3 actionable items that cost nothing and take under 5 minutes. Then give your full detailed recommendations below. End with: 'Always consult your doctor before making changes.'"},
+    "synthesizer": {"name": "Synthesizer", "emoji": "💡", "system": "You are the Synthesizer, a medical professor. You give exactly 3 numbered, bold recommendations. Always remind patients to consult their doctor."},
     "dr_heart": {"name": "Dr. Heart", "emoji": "❤️", "system": "You are Dr. Heart, a cardiologist. Focus on blood pressure, cholesterol, circulation. Give bullet points."},
     "nutri": {"name": "Nutri", "emoji": "🥑", "system": "You are Nutri, a functional nutritionist. Build on what the previous specialists said. Give bullet points."},
     "longevity": {"name": "Longevity", "emoji": "⏳", "system": "You are Longevity, an anti-aging researcher. Build on what previous specialists said. Give bullet points."},
     "holistics": {"name": "Holistics", "emoji": "🌿", "system": "You are Holistics, an integrative medicine specialist. Build on what previous specialists said. Give bullet points."},
-    "medi_suppi": {"name": "Medi/Suppi", "emoji": "💊", "system": "You are Medi/Suppi, a pharmacology and supplement safety specialist. Start your response with: '3 THINGS YOU'RE DOING RIGHT (based on your supplements):' list 3 positives, then '3 THINGS TO WATCH FOR:' list 3 concerns. Then continue with full detail: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE. Always remind: 'Consult your doctor or pharmacist.'"},
+    "medi_suppi": {"name": "Medi/Suppi", "emoji": "💊", "system": "You are Medi/Suppi, a pharmacology and supplement safety specialist. Give 3 sections: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE. Always remind: 'Consult your doctor or pharmacist.'"},
 }
 
 def avatar_img(key, size=40):
@@ -85,24 +87,18 @@ def save_feedback(did, agent, rating):
     conn = sqlite3.connect("debates.db")
     cur = conn.execute("SELECT feedback FROM debates WHERE id=?", (did,))
     row = cur.fetchone()
-    if not row:
-        conn.close()
-        return
-    fb = json.loads(row[0])
+    fb = json.loads(row[0]) if row and row[0] else {}
     fb[agent] = rating
     conn.execute("UPDATE debates SET feedback=? WHERE id=?", (json.dumps(fb), did))
     conn.commit()
     conn.close()
 
-def get_debate(did):
+def get_feedback(did):
     conn = sqlite3.connect("debates.db")
-    cur = conn.execute("SELECT * FROM debates WHERE id=?", (did,))
+    cur = conn.execute("SELECT feedback FROM debates WHERE id=?", (did,))
     row = cur.fetchone()
     conn.close()
-    if not row:
-        return None
-    return {"id": row[0], "case": row[1], "goals": row[2], "constraints": row[3], "model": row[4],
-            "supplements": row[5], "results": json.loads(row[6]), "timestamp": row[7], "views": row[8], "feedback": json.loads(row[9])}
+    return json.loads(row[0]) if row and row[0] else {}
 
 def make_id():
     return hashlib.sha256(str(time.time()).encode()).hexdigest()[:8]
@@ -144,7 +140,7 @@ def feed_html():
     debates = recent_debates()
     if not debates:
         return "<em>No debates yet — run a case above!</em>"
-    html = "<h3>📋 Recent Debates</h3><table><tr><th>ID</th><th>Case</th><th>Date</th><th>Views</th></tr>"
+    html = "<h3>📖 Recent Debates</h3><table><tr><th>ID</th><th>Case</th><th>Date</th><th>Views</th></tr>"
     for did, d in debates:
         prev = (d["case"][:45] + "...") if len(d["case"]) > 45 else d["case"]
         prev = prev.replace("\n", " ")
@@ -152,71 +148,19 @@ def feed_html():
     html += "</table>"
     return html
 
-def fetch_pubmed_research(query, max_results=3):
-    """Fetch recent PubMed studies for a given query. Returns formatted research string."""
-    try:
-        encoded_query = urllib.parse.quote(query)
-        search_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={encoded_query}&retmode=json&retmax={max_results}&sort=relevance&reldate=365"
-        req = urllib.request.Request(search_url)
-        req.add_header("User-Agent", "Mozilla/5.0 (compatible; HealthRoundTable/1.0)")
-        with urllib.request.urlopen(req, timeout=15) as response:
-            search_result = json.loads(response.read())
-        ids = search_result.get("esearchresult", {}).get("idlist", [])
-        if not ids:
-            return ""
-        ids_str = ",".join(ids)
-        summary_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={ids_str}&retmode=json"
-        req2 = urllib.request.Request(summary_url)
-        req2.add_header("User-Agent", "Mozilla/5.0 (compatible; HealthRoundTable/1.0)")
-        with urllib.request.urlopen(req2, timeout=15) as response:
-            summary_result = json.loads(response.read())
-        lines = ["", "[RECENT RESEARCH FROM PUBMED]", "=" * 40]
-        result_data = summary_result.get("result", {})
-        for uid in ids:
-            article = result_data.get(uid, {})
-            title = article.get("title", "Unknown title")
-            pubdate = article.get("pubdate", "Unknown date")
-            source = article.get("source", "Unknown journal")
-            authors = article.get("authors", [])
-            author_names = [a.get("name", "") for a in authors[:3]]
-            author_str = ", ".join([n for n in author_names if n])
-            if len(authors) > 3:
-                author_str += " et al."
-            articleids = article.get("articleids", [])
-            doi = ""
-            for ai in articleids:
-                if ai.get("idtype") == "doi":
-                    doi = ai.get("value", "")
-                    break
-            lines.append(f"\n• {title}")
-            lines.append(f"  {author_str} | {pubdate} | {source}")
-            if doi:
-                lines.append(f"  DOI: https://doi.org/{doi}")
-        lines.append("=" * 40)
-        return "\n".join(lines)
-    except Exception as e:
-        return f"\n[PubMed error: {str(e)}]"
-
-def get_pubmed_query(agent_key, case_text):
-    """Map agent to a PubMed search query based on case context."""
-    queries = {
-        "dr_heart": "blood pressure cardiovascular cholesterol 2025",
-        "nutri": "nutrition diet metabolic supplements 2025",
-        "longevity": "longevity aging anti-aging biomarkers 2025",
-        "holistics": "integrative medicine whole-body approach 2025",
-        "medi_suppi": "drug supplement interactions safety 2025",
-    }
-    return queries.get(agent_key, case_text)
-
 def chat(model, system, messages, timeout=60):
     base = get_base_url(model)
     payload = {"model": model, "messages": [{"role": "system", "content": system}] + messages, "stream": False}
     data = json.dumps(payload).encode()
     if base == LOCAL_URL:
-        hdrs = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json"}
     else:
-        hdrs = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    req = urllib.request.Request(f"{base}/api/chat", data=data, headers=hdrs, method="POST")
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+    req = urllib.request.Request(f"{base}/api/chat", data=data, headers=headers, method="POST")
     try:
         r = urllib.request.urlopen(req, timeout=timeout)
         return json.loads(r.read())["message"]["content"]
@@ -235,24 +179,19 @@ def run_debate(case, goals, constraints, model_choice, supplements, guest):
         except Exception as e:
             return f"Error: {e}"
 
-    dr_research = fetch_pubmed_research(get_pubmed_query("dr_heart", case), max_results=3)
-    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}{dr_research}\nBullet points.", f"Analyze: {case}")
+    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nBullet points.", f"Analyze: {case}")
     yield {"dr_heart": dr}
-    nu_research = fetch_pubmed_research(get_pubmed_query("nutri", case), max_results=3)
-    nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}{nu_research}\nBullet points.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
+    nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}\nBullet points.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
     yield {"dr_heart": dr, "nutri": nu}
-    lo_research = fetch_pubmed_research(get_pubmed_query("longevity", case), max_results=3)
-    lo = ask(f"You are Longevity, anti-aging researcher.{ctx}{lo_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
+    lo = ask(f"You are Longevity, anti-aging researcher.{ctx}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo}
-    ho_research = fetch_pubmed_research(get_pubmed_query("holistics", case), max_results=3)
-    ho = ask(f"You are Holistics, integrative medicine.{ctx}{ho_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
+    ho = ask(f"You are Holistics, integrative medicine.{ctx}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho}
     sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations.{ctx}",
             f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy}
     if supplements and supplements.strip():
-        me_research = fetch_pubmed_research(get_pubmed_query("medi_suppi", case), max_results=3)
-        me = ask("You are Medi/Suppi, pharmacology safety specialist.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'{me_research}",
+        me = ask("You are Medi/Suppi, pharmacology safety specialist.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'",
                 f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
     else:
         me = "No supplements listed."
@@ -312,24 +251,24 @@ No waiting rooms. No 3-week specialist waits. No 15-minute rushed appointments.
 
 ### Not Medical Advice ⚠️
 Health Round Table is for educational discussion only. Always consult your doctor before making health decisions.
-"""
+""")
 
         with gr.TabItem("Group Debate"):
             with gr.Row():
                 with gr.Column(scale=3):
-                    case_input = gr.Textbox(label="Patient Case", placeholder="Age: 42\nM/F: F\nWeight: 150 lbs\nHeight: 5'4"\nBPM: 95\nSymptoms: swollen feet (edema) for 2 weeks, occasional shortness of breath\nExercise level: sedentary, 1 day a week, none\n\nAdditional Details:", lines=8)
+                    case_input = gr.Textbox(label="Patient Case", placeholder="Age: 42\nM/F: F\nWeight: 150 lbs\nHeight: 5'4\"\nBPM: 95\nSymptoms: swollen feet (edema) for 2 weeks, occasional shortness of breath\nExercise level: sedentary, 1 day a week, none\n\nAdditional Details:", lines=8)
                     guest_input = gr.Textbox(label="Guest Perspectives (paste what other AIs said)", placeholder="Paste any external AI analysis here...", lines=3)
                 with gr.Column(scale=1):
                     goals_input = gr.Textbox(label="Patient Goals", placeholder="e.g. avoid medication, lose 20 lbs...", lines=3)
                     constraints_input = gr.Textbox(label="Constraints / Allergies", placeholder="e.g. on metformin, allergic to penicillin...", lines=3)
                     supplements_input = gr.Textbox(label="Supplements / Medications", placeholder="e.g. magnesium 400mg, fish oil...", lines=3)
-                    model_choice = gr.Dropdown(["deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="AI Model")
+                    model_choice = gr.Dropdown(["qwen2.5:7b", "deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="AI Model")
                     start_btn = gr.Button("Start Round Table", variant="primary")
 
             with gr.Accordion("TLDR — Key Recommendations", open=True):
                 tldr_output = gr.Markdown("*Results appear here*")
 
-            with gr.Accordion("❤ Dr. Heart", open=False):
+            with gr.Accordion("❤️ Dr. Heart", open=False):
                 gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("dr_heart") + '<b>Dr. Heart</b> — Cardiology</div>')
                 dr_out = gr.Markdown("*Waiting*")
 
@@ -345,73 +284,64 @@ Health Round Table is for educational discussion only. Always consult your docto
                 gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("holistics") + '<b>Holistics</b> — Integrative Medicine</div>')
                 ho_out = gr.Markdown("*Waiting*")
 
+            with gr.Accordion("💊 Medi/Suppi", open=False):
+                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("medi_suppi") + '<b>Medi/Suppi</b> — Drug + Supplement Safety</div>')
+                me_out = gr.Markdown("*Waiting*")
+
             gr.Markdown("*Each specialist reads all previous analyses.*")
 
             gr.Markdown("---")
             gr.Markdown("### Load a Saved Debate")
             with gr.Row():
-                load_input = gr.Textbox(label="Debate ID", placeholder="Enter debate ID...", lines=1)
-                load_btn = gr.Button("Load Debate", size="sm")
-            load_output = gr.Markdown("*No debate loaded*")
+                did_input = gr.Textbox(label="Debate ID", placeholder="Paste ID here", lines=1)
+                load_btn = gr.Button("Load")
+            did_info = gr.Markdown("*Paste a debate ID above to load it*")
 
-            gr.Markdown("---")
-            gr.Markdown("### Recent Debates")
-            gr.HTML(feed_html())
+            feed_out = gr.HTML()
+            demo.load(fn=lambda: [feed_html()], inputs=[], outputs=[feed_out])
 
-            status_box = gr.HTML("<em>Ready</em>")
+            def on_start(case, goals, constraints, model, supplements, guest):
+                yield ["*Working...*"] * 6 + ["", "⏳ Dr. Heart analyzing...", feed_html()]
+                for partial in run_debate(case, goals, constraints, model, supplements, guest):
+                    dr = partial.get("dr_heart", "*Waiting*")
+                    nu = partial.get("nutri", "*Waiting*")
+                    lo = partial.get("longevity", "*Waiting*")
+                    ho = partial.get("holistics", "*Waiting*")
+                    sy = partial.get("synthesizer", "*Working...*")
+                    me = partial.get("medi_suppi", "*Waiting*")
+                    cnt = sum(1 for x in [nu, lo, ho, sy, me] if x not in ("*Waiting*", "*Working...*"))
+                    loading = f"⏳ Running specialists... ({cnt+1}/6)"
+                    yield [sy, dr, nu, lo, ho, me, "", loading, feed_html()]
+                results, did, url = partial if isinstance(partial, tuple) else (None, None, None)
+                share = f"**Saved!** [Open debate]({url}) | ID: `{did}`"
+                yield [sy, dr, nu, lo, ho, me, share, "", feed_html()]
 
-            def on_start(case, goals, constraints, supplements, model_sel, guest):
-                if not case or not case.strip():
-                    yield {"msg": "Please enter a case study.", "tldr": "*Please enter a case*", "dr": "*Waiting*", "nu": "*Waiting*", "lo": "*Waiting*", "ho": "*Waiting*", "status": "❌ Enter a case study"}
-                    return
-                yield {"msg": "Processing...", "tldr": "*Processing — running agents...*", "dr": "⏳ Running Dr. Heart...", "nu": "⏳ Running Nutri...", "lo": "⏳ Running Longevity...", "ho": "⏳ Running Holistics...", "status": "⏳ Processing — this takes 2-3 minutes..."}
-                try:
-                    for update in run_debate(case, goals, constraints, model_sel, supplements, guest):
-                        dr_text = update.get("dr_heart", "")
-                        nu_text = update.get("nutri", "")
-                        lo_text = update.get("longevity", "")
-                        ho_text = update.get("holistics", "")
-                        tldr_text = update.get("synthesizer", "")
-                        yield {
-                            "msg": "✅ Complete!",
-                            "tldr": f"**Synthesizer Recommendations:**\n{tldr_text}\n\n**Key Takeaways:**\n{dr_text[:200]}..." if tldr_text else "*Complete*",
-                            "dr": f"✅ Dr. Heart:\n{dr_text}" if dr_text else "⏳",
-                            "nu": f"✅ Nutri:\n{nu_text}" if nu_text else "⏳",
-                            "lo": f"✅ Longevity:\n{lo_text}" if lo_text else "⏳",
-                            "ho": f"✅ Holistics:\n{ho_text}" if ho_text else "⏳",
-                            "status": "✅ All specialists done!"
-                        }
-                except Exception as e:
-                    yield {"msg": f"Error: {str(e)}", "tldr": f"*Error: {str(e)}*", "dr": "*Error*", "nu": "*Error*", "lo": "*Error*", "ho": "*Error*", "status": f"❌ Error: {str(e)}"}
-
-            def on_load(did):
+            def on_load(did_raw):
+                did = did_raw.strip() if did_raw else ""
+                if not did:
+                    return ["*Paste a debate ID above*", "", "", "", "", "", "", "", feed_html()]
                 d = load_debate(did)
                 if not d:
-                    return f"*Debate {did} not found*", gr.update()
+                    return ["⚠️ Not found.", "", "", "", "", "", "", "", feed_html()]
                 inc_views(did)
                 r = d["results"]
-                tldr = r.get("synthesizer", "")
-                return (
-                    f"**Loaded Debate {did} from {d['timestamp']}**\n\n"
-                    f"**Synthesizer:**\n{tldr}\n\n"
-                    f"**Dr. Heart:** {r.get('dr_heart','')[:300]}...\n\n"
-                    f"**Nutri:** {r.get('nutri','')[:300]}...\n\n"
-                    f"**Longevity:** {r.get('longevity','')[:300]}...",
-                    gr.update(open=True)
-                )
+                info = f"**Case:** {d['case']}\n**Goals:** {d['goals']}\n**Constraints:** {d['constraints']}\n**Ran:** {d['timestamp']} | Views: {d['views']+1}\n\n**Share:** [Open debate](https://health-round-table.com/?id={did})"
+                return [info, r["synthesizer"], r["dr_heart"], r["nutri"], r["longevity"], r["holistics"], r["medi_suppi"], "", ""]
 
-            start_btn.click(fn=on_start, inputs=[case_input, goals_input, constraints_input, supplements_input, model_choice, guest_input],
-                           outputs=[status_box, tldr_output, dr_out, nu_out, lo_out, ho_out])
-            load_btn.click(fn=on_load, inputs=[load_input], outputs=[load_output])
+            start_btn.click(
+                fn=on_start,
+                inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input, guest_input],
+                outputs=[tldr_output, dr_out, nu_out, lo_out, ho_out, me_out, did_info, gr.HTML(), feed_out]
+            )
+            load_btn.click(fn=on_load, inputs=[did_input],
+                          outputs=[did_info, tldr_output, dr_out, nu_out, lo_out, ho_out, me_out, gr.HTML(), feed_out])
 
         with gr.TabItem("Chat Individually"):
-            agent_keys = ["dr_heart", "nutri", "longevity", "holistics", "medi_suppi", "synthesizer"]
-            agent_names = ["Dr. Heart", "Nutri", "Longevity", "Holistics", "Medi/Suppi", "Synthesizer"]
-            with gr.Tabs() as individual_tabs:
-                for i, (akey, aname) in enumerate(zip(agent_keys, agent_names)):
-                    with gr.TabItem(aname):
-                        agent = AGENTS[akey]
-                        gr.HTML(f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">{avatar_img(akey, 48)}<span style="font-size:1.2em;"><b>{agent["name"]}</b> {agent["emoji"]}</span></div>')
+            gr.Markdown("### Chat one-on-one with any agent.")
+            with gr.Tabs():
+                for agent_key, agent in AGENTS.items():
+                    with gr.TabItem(f"{agent['emoji']} {agent['name']}"):
+                        gr.HTML(f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">{avatar_img(agent_key, 48)}<span style="font-size:1.2em;"><b>{agent["name"]}</b> {agent["emoji"]}</span></div>')
                         chatbot = gr.Chatbot(label=agent["name"], height=300)
                         msg = gr.Textbox(label=f"Message {agent['name']}", placeholder="Type a message...", lines=2)
                         with gr.Row():
