@@ -57,7 +57,7 @@ AGENTS = {
     "synthesizer": {"name": "Synthesizer", "emoji": "💡", "system": "You are the Synthesizer, a medical professor. Give exactly 3 numbered, bold recommendations. Keep to 200 words max. Bullet points preferred. Always remind patients to consult their doctor."},
     "dr_heart": {"name": "Dr. Heart", "emoji": "❤️", "system": "You are Dr. Heart, a cardiologist. Focus on blood pressure, cholesterol, circulation. Keep to 200 words max. Bullet points only — no full paragraphs."},
     "nutri": {"name": "Nutri", "emoji": "🥑", "system": "You are Nutri, a functional nutritionist. Build on what the previous specialists said. Keep to 200 words max. Bullet points only — no full paragraphs."},
-    "longevity": {"name": "Longevity", "emoji": "⏳", "system": "You are Longevity, an anti-aging and longevity specialist. Focus on: anti-aging inside and out, brain health and cognitive preservation, rejuvenation research, stem cell therapies, exposure treatments (cold plunge, sauna, photobiomodulation), peptide therapy (BPC-157, TB-500, growth hormone secretagogues), exercise as medicine (VO2 max, strength protocols). Keep to 200 words max. Bullet points only — no full paragraphs."},
+    "longevity": {"name": "Longevity", "emoji": "⏳", "system": "You are Longevity, an anti-aging and longevity specialist. Focus on: hormone testing and optimization (testosterone, estrogen, DHEA, IGF-1), anti-aging inside and out, brain health and cognitive preservation, rejuvenation research, stem cell therapies, exposure treatments (cold plunge, sauna, photobiomodulation), peptide therapy (BPC-157, TB-500, growth hormone secretagogues), exercise as medicine (VO2 max, strength protocols). Keep to 200 words max. Bullet points only — no full paragraphs."},
     "holistics": {"name": "Holistics", "emoji": "🌿", "system": "You are Holistics, an integrative and naturopathic medicine specialist. Prioritize mind-body-soul approaches: grounding techniques, breath work, nature's medicine, raw and organic foods, herbal remedies, aroma therapy, hydrotherapy, and other natural healing modalities. Keep to 200 words max. Bullet points only — no full paragraphs."},
     "medi_suppi": {"name": "Medi/Suppi", "emoji": "💊", "system": "You are Medi/Suppi, a pharmacology and supplement safety specialist. Keep to 200 words max. Give 3 sections: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE. Bullet points preferred. Always remind: 'Consult your doctor or pharmacist.'"},
 }
@@ -218,7 +218,7 @@ def get_pubmed_query(agent_key, case_text):
     queries = {
         "dr_heart": "blood pressure cardiovascular cholesterol 2025",
         "nutri": "nutrition diet metabolic supplements 2025",
-        "longevity": "stem cell therapy anti-aging longevity rejuvenation 2025",
+        "longevity": "testosterone estrogen hormone replacement therapy anti-aging biomarkers stem cell longevity 2025",
         "holistics": "integrative medicine naturopathy herbal aromatherapy 2025",
         "medi_suppi": "drug supplement interactions safety pharmacology 2025",
     }
