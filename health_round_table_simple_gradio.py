@@ -54,12 +54,12 @@ AVATARS = {
 }
 
 AGENTS = {
-    "synthesizer": {"name": "Synthesizer", "emoji": "💡", "system": "You are the Synthesizer, a medical professor. Give exactly 3 numbered, bold recommendations. Keep to 150 words max. Bullet points preferred. Always remind patients to consult their doctor."},
-    "dr_heart": {"name": "Dr. Heart", "emoji": "❤️", "system": "You are Dr. Heart, a cardiologist. Focus on blood pressure, cholesterol, circulation. Keep to 150 words max. Bullet points only — no full paragraphs."},
-    "nutri": {"name": "Nutri", "emoji": "🥑", "system": "You are Nutri, a functional nutritionist. Build on what the previous specialists said. Keep to 150 words max. Bullet points only — no full paragraphs."},
-    "longevity": {"name": "Longevity", "emoji": "⏳", "system": "You are Longevity, an anti-aging researcher. Build on what previous specialists said. Keep to 150 words max. Bullet points only — no full paragraphs."},
-    "holistics": {"name": "Holistics", "emoji": "🌿", "system": "You are Holistics, an integrative medicine specialist. Build on what previous specialists said. Keep to 150 words max. Bullet points only — no full paragraphs."},
-    "medi_suppi": {"name": "Medi/Suppi", "emoji": "💊", "system": "You are Medi/Suppi, a pharmacology and supplement safety specialist. Keep to 150 words max. Give 3 sections: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE. Bullet points preferred. Always remind: 'Consult your doctor or pharmacist.'"},
+    "synthesizer": {"name": "Synthesizer", "emoji": "💡", "system": "You are the Synthesizer, a medical professor. Give exactly 3 numbered, bold recommendations. Keep to 200 words max. Bullet points preferred. Always remind patients to consult their doctor."},
+    "dr_heart": {"name": "Dr. Heart", "emoji": "❤️", "system": "You are Dr. Heart, a cardiologist. Focus on blood pressure, cholesterol, circulation. Keep to 200 words max. Bullet points only — no full paragraphs."},
+    "nutri": {"name": "Nutri", "emoji": "🥑", "system": "You are Nutri, a functional nutritionist. Build on what the previous specialists said. Keep to 200 words max. Bullet points only — no full paragraphs."},
+    "longevity": {"name": "Longevity", "emoji": "⏳", "system": "You are Longevity, an anti-aging and longevity specialist. Focus on: anti-aging inside and out, brain health and cognitive preservation, rejuvenation research, stem cell therapies, exposure treatments (cold plunge, sauna, photobiomodulation), peptide therapy (BPC-157, TB-500, growth hormone secretagogues), exercise as medicine (VO2 max, strength protocols). Keep to 200 words max. Bullet points only — no full paragraphs."},
+    "holistics": {"name": "Holistics", "emoji": "🌿", "system": "You are Holistics, an integrative and naturopathic medicine specialist. Prioritize mind-body-soul approaches: grounding techniques, breath work, nature's medicine, raw and organic foods, herbal remedies, aroma therapy, hydrotherapy, and other natural healing modalities. Keep to 200 words max. Bullet points only — no full paragraphs."},
+    "medi_suppi": {"name": "Medi/Suppi", "emoji": "💊", "system": "You are Medi/Suppi, a pharmacology and supplement safety specialist. Keep to 200 words max. Give 3 sections: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE. Bullet points preferred. Always remind: 'Consult your doctor or pharmacist.'"},
 }
 
 def avatar_img(key, size=40):
@@ -252,23 +252,23 @@ def run_debate(case, goals, constraints, model_choice, supplements, guest):
             return f"Error: {e}"
 
     dr_research = fetch_pubmed_research(get_pubmed_query("dr_heart", case), max_results=3)
-    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}{dr_research}\nBullet points.", f"Analyze: {case}")
+    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nKeep to 200 words max. Bullet points only.{dr_research}\nBullet points.", f"Analyze: {case}")
     yield {"dr_heart": dr}
     nu_research = fetch_pubmed_research(get_pubmed_query("nutri", case), max_results=3)
-    nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}{nu_research}\nBullet points.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
+    nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}\nKeep to 200 words max. Bullet points only.{nu_research}\nBullet points.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
     yield {"dr_heart": dr, "nutri": nu}
     lo_research = fetch_pubmed_research(get_pubmed_query("longevity", case), max_results=3)
-    lo = ask(f"You are Longevity, anti-aging researcher.{ctx}{lo_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
+    lo = ask(f"You are Longevity, anti-aging and longevity specialist. Focus on: anti-aging inside and out, brain health and cognitive preservation, rejuvenation research, stem cell therapies, exposure treatments (cold plunge, sauna, photobiomodulation), peptide therapy (BPC-157, TB-500, growth hormone secretagogues), exercise as medicine (VO2 max, strength protocols).{ctx}\nKeep to 200 words max. Bullet points only.{lo_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo}
     ho_research = fetch_pubmed_research(get_pubmed_query("holistics", case), max_results=3)
-    ho = ask(f"You are Holistics, integrative medicine.{ctx}{ho_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
+    ho = ask(f"You are Holistics, integrative and naturopathic medicine specialist. Prioritize mind-body-soul approaches: grounding techniques, breath work, nature's medicine, raw and organic foods, herbal remedies, aroma therapy, hydrotherapy, and other natural healing modalities.{ctx}\nKeep to 200 words max. Bullet points only.{ho_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
+    ho = ask(f"You are Holistics, integrative and naturopathic medicine specialist. Prioritize mind-body-soul approaches: grounding techniques, breath work, nature's medicine, raw and organic foods, herbal remedies, aroma therapy, hydrotherapy, and other natural healing modalities.{ctx}\nKeep to 200 words max. Bullet points only.{ho_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho}
-    sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations.{ctx}",
-            f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
+    sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations. Keep to 200 words max.{ctx}",
+             f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy}
     if supplements and supplements.strip():
-        me_research = fetch_pubmed_research(get_pubmed_query("medi_suppi", case), max_results=3)
-        me = ask("You are Medi/Suppi, pharmacology safety specialist.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'{me_research}",
+        me = ask("You are Medi/Suppi, pharmacology safety specialist.\nKeep to 200 words max.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'\"{me_research}",
                 f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
     else:
         me = "No supplements listed."
