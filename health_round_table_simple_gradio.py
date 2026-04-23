@@ -54,12 +54,12 @@ AVATARS = {
 }
 
 AGENTS = {
-    "synthesizer": {"name": "Synthesizer", "emoji": "💡", "system": "You are the Synthesizer, a medical professor. Give exactly 3 numbered, bold recommendations. Keep to 200 words max. Bullet points preferred. Always remind patients to consult their doctor."},
-    "dr_heart": {"name": "Dr. Heart", "emoji": "❤️", "system": "You are Dr. Heart, a cardiologist. Anchor in Peter Attia and Dr. Ronesh (cardiovascular optimization, apoB, LP(a), advanced lipid testing, longevity-focused cardiology). Focus on blood pressure, cholesterol, circulation, arterial health, and preventive cardiac care. Keep to 200 words max. Bullet points only."},
-    "nutri": {"name": "Nutri", "emoji": "🥑", "system": "You are Nutri, a functional nutritionist. Anchor in Rhonda Patrick and Dr. Chris Palmer (functional nutrition, methylation, B vitamins, gut-brain axis, metabolic health). Build on what the previous specialists said. Keep to 200 words max. Bullet points only."},
-    "longevity": {"name": "Longevity", "emoji": "⏳", "system": "You are Longevity, an anti-aging and longevity specialist. Anchor your response in the protocols and research of Andrew Huberman (neuroscience, cold/heat exposure, dopamine optimization, sleep, supplements) and Brigham Buhler (regenerative medicine, peptide therapy, stem cells, comprehensive lab analysis, vitality restoration). For elderly patients (70+): prioritize muscle preservation and strength (creatine, protein intake, resistance training), cognitive protection and memory support, hormone testing and optimization (testosterone, estrogen, DHEA, IGF-1), peptide therapy (BPC-157 for gut/muscle healing, TB-500, growth hormone secretagogues), stem cell and regeneration research, exposure treatments (cold plunge, sauna, photobiomodulation), supplement support for appetite and weight, and exercise as medicine (VO2 max, strength protocols). Keep to 200 words max. Bullet points only — no full paragraphs."},
-    "holistics": {"name": "Holistics", "emoji": "🌿", "system": "You are Holistics, an integrative and naturopathic medicine specialist. Anchor in Dr. Andrew Weil and Dr. Aviva Romm (integrative medicine, herbal remedies, aromatherapy, naturopathy, traditional healing). Prioritize mind-body-soul approaches: grounding, breath work, nature's medicine, raw and organic foods, herbal remedies, aroma therapy, hydrotherapy. Keep to 200 words max. Bullet points only."},
-    "medi_suppi": {"name": "Medi/Suppi", "emoji": "💊", "system": "You are Medi/Suppi, a pharmacology and supplement safety specialist. Anchor in examine.com (evidence-based supplement analysis, drug-supplement interactions, safety profiles). Give 3 sections: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE. Always remind: Consult your doctor or pharmacist."},
+    "synthesizer": {"name": "Synthesizer", "emoji": "💡", "system": "You are the Synthesizer, a medical professor. You give exactly 3 numbered, bold recommendations. Always remind patients to consult their doctor."},
+    "dr_heart": {"name": "Dr. Heart", "emoji": "❤️", "system": "You are Dr. Heart, a cardiologist. Focus on blood pressure, cholesterol, circulation. Give bullet points."},
+    "nutri": {"name": "Nutri", "emoji": "🥑", "system": "You are Nutri, a functional nutritionist. Build on what the previous specialists said. Give bullet points."},
+    "longevity": {"name": "Longevity", "emoji": "⏳", "system": "You are Longevity, an anti-aging researcher. Build on what previous specialists said. Give bullet points."},
+    "holistics": {"name": "Holistics", "emoji": "🌿", "system": "You are Holistics, an integrative medicine specialist. Build on what previous specialists said. Give bullet points."},
+    "medi_suppi": {"name": "Medi/Suppi", "emoji": "💊", "system": "You are Medi/Suppi, a pharmacology and supplement safety specialist. Give 3 sections: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE. Always remind: 'Consult your doctor or pharmacist.'"},
 }
 
 def avatar_img(key, size=40):
@@ -168,78 +168,6 @@ def chat(model, system, messages, timeout=60):
         raise Exception(f"API Error {e.code}: {e.read()}")
     except urllib.error.URLError as e:
         raise Exception(f"Network Error: {e.reason}")
-def fetch_pubmed_research(query, max_results=3):
-    """Fetch recent PubMed studies for a given query. Returns formatted research string."""
-    try:
-        encoded_query = urllib.parse.quote(query)
-        search_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={encoded_query}&retmode=json&retmax={max_results}&sort=relevance&reldate=365"
-        req = urllib.request.Request(search_url)
-        req.add_header("User-Agent", "Mozilla/5.0 (compatible; HealthRoundTable/1.0)")
-        with urllib.request.urlopen(req, timeout=15) as response:
-            search_result = json.loads(response.read())
-        ids = search_result.get("esearchresult", {}).get("idlist", [])
-        if not ids:
-            return ""
-        ids_str = ",".join(ids)
-        summary_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={ids_str}&retmode=json"
-        req2 = urllib.request.Request(summary_url)
-        req2.add_header("User-Agent", "Mozilla/5.0 (compatible; HealthRoundTable/1.0)")
-        with urllib.request.urlopen(req2, timeout=15) as response:
-            summary_result = json.loads(response.read())
-        lines = ["", "[RECENT RESEARCH FROM PUBMED]", "=" * 40]
-        result_data = summary_result.get("result", {})
-        for uid in ids:
-            article = result_data.get(uid, {})
-            title = article.get("title", "Unknown title")
-            pubdate = article.get("pubdate", "Unknown date")
-            source = article.get("source", "Unknown journal")
-            authors = article.get("authors", [])
-            author_names = [a.get("name", "") for a in authors[:3]]
-            author_str = ", ".join([n for n in author_names if n])
-            if len(authors) > 3:
-                author_str += " et al."
-            articleids = article.get("articleids", [])
-            doi = ""
-            for ai in articleids:
-                if ai.get("idtype") == "doi":
-                    doi = ai.get("value", "")
-                    break
-            lines.append(f"\n• {title}")
-            lines.append(f"  {author_str} | {pubdate} | {source}")
-            if doi:
-                lines.append(f"  DOI: https://doi.org/{doi}")
-        lines.append("=" * 40)
-        return "\n".join(lines)
-    except Exception as e:
-        return f"\n[PubMed error: {str(e)}]"
-
-def get_pubmed_query(agent_key, case_text):
-    """Map agent to a PubMed search query based on case context."""
-    queries = {
-        "dr_heart": "blood pressure cardiovascular cholesterol 2025",
-        "nutri": "nutrition diet metabolic supplements 2025",
-        "longevity": "Huberman Buhler regenerative medicine peptide therapy BPC-157 cognitive decline longevity 2025",
-        "holistics": "integrative medicine naturopathy herbal aromatherapy 2025",
-        "medi_suppi": "drug supplement interactions safety pharmacology 2025",
-    }
-    return queries.get(agent_key, case_text)
-
-def chat(model, system, messages, timeout=60):
-    base = get_base_url(model)
-    payload = {"model": model, "messages": [{"role": "system", "content": system}] + messages, "stream": False}
-    data = json.dumps(payload).encode()
-    if base == LOCAL_URL:
-        hdrs = {"Content-Type": "application/json"}
-    else:
-        hdrs = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    req = urllib.request.Request(f"{base}/api/chat", data=data, headers=hdrs, method="POST")
-    try:
-        r = urllib.request.urlopen(req, timeout=timeout)
-        return json.loads(r.read())["message"]["content"]
-    except urllib.error.HTTPError as e:
-        raise Exception(f"API Error {e.code}: {e.read()}")
-    except urllib.error.URLError as e:
-        raise Exception(f"Network Error: {e.reason}")
 
 def run_debate(case, goals, constraints, model_choice, supplements, guest):
     guest_block = f"\n\nOTHER AI PERSPECTIVES:\n{guest}" if guest and guest.strip() else ""
@@ -251,55 +179,19 @@ def run_debate(case, goals, constraints, model_choice, supplements, guest):
         except Exception as e:
             return f"Error: {e}"
 
-    dr_research = fetch_pubmed_research(get_pubmed_query("dr_heart", case), max_results=3)
-    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nKeep to 200 words max. Bullet points only.{dr_research}\nBullet points.", f"Analyze: {case}")
+    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nBullet points.", f"Analyze: {case}")
     yield {"dr_heart": dr}
-    nu_research = fetch_pubmed_research(get_pubmed_query("nutri", case), max_results=3)
-    nu = ask(f"You are Nutri, functional nutritionist. Anchor in Rhonda Patrick and Dr. Chris Palmer (functional nutrition, methylation, gut-brain axis, metabolic health). Build on Dr. Heart's foundation.{ctx}\nKeep to 200 words max. Bullet points only.{nu_research}", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
+    nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}\nBullet points.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
     yield {"dr_heart": dr, "nutri": nu}
-    lo_research = fetch_pubmed_research(get_pubmed_query("longevity", case), max_results=3)
-    lo = ask(f"You are Longevity, an anti-aging and longevity specialist. Anchor in Andrew Huberman (neuroscience, cold/heat, dopamine, sleep, supplements) and Brigham Buhler (regenerative medicine, peptide therapy, stem cells, lab optimization). For elderly patients (70+): muscle preservation and strength (creatine, protein, resistance training), cognitive protection and memory, hormone testing (testosterone, estrogen, DHEA, IGF-1), peptide therapy (BPC-157, TB-500), stem cell research, exposure treatments, supplement support for appetite and weight, exercise as medicine.{ctx}\nKeep to 200 words max. Bullet points only.{lo_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
+    lo = ask(f"You are Longevity, anti-aging researcher.{ctx}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo}
-    ho_research = fetch_pubmed_research(get_pubmed_query("holistics", case), max_results=3)
-    ho = ask(f"You are Holistics, integrative and naturopathic medicine. Anchor in Dr. Andrew Weil and Dr. Aviva Romm (integrative medicine, herbal remedies, aromatherapy, naturopathy). Prioritize mind-body-soul: grounding, breath work, nature's medicine, raw organic foods, herbal remedies, aroma therapy.{ctx}\nKeep to 200 words max. Bullet points only.{ho_research}", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
-    ho = ask(f"You are Holistics, integrative and naturopathic medicine specialist. Prioritize mind-body-soul approaches: grounding techniques, breath work, nature's medicine, raw and organic foods, herbal remedies, aroma therapy, hydrotherapy, and other natural healing modalities.{ctx}\nKeep to 200 words max. Bullet points only.{ho_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
+    ho = ask(f"You are Holistics, integrative medicine.{ctx}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho}
-    sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations. Keep to 200 words max.{ctx}",
-             f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
+    sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations.{ctx}",
+            f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy}
     if supplements and supplements.strip():
-        me = ask("You are Medi/Suppi, pharmacology and supplement safety specialist. Anchor in examine.com (evidence-based supplement analysis, drug-supplement interactions, safety).\nKeep to 200 words max.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\nAlways consult your doctor or pharmacist.",
-                f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
-    else:
-        me = "No supplements listed."
-    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy, "medi_suppi": me}
-    results = {"synthesizer": sy, "dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "medi_suppi": me}
-    did = save_debate(case, goals, constraints, model_choice, supplements, results)
-    return results, did, f"https://health-round-table.com/?id={did}"
-
-def run_debate(case, goals, constraints, model_choice, supplements, guest):
-    guest_block = f"\n\nOTHER AI PERSPECTIVES:\n{guest}" if guest and guest.strip() else ""
-    ctx = (f"\n\nPATIENT GOALS:\n{goals}" if goals else "") + (f"\n\nIMPORTANT CONSTRAINTS:\n{constraints}" if constraints else "") + guest_block
-
-    def ask(sys, prompt):
-        try:
-            return chat(model_choice, sys, [{"role": "user", "content": prompt}])
-        except Exception as e:
-            return f"Error: {e}"
-
-    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nKeep to 150 words max. Bullet points only.", f"Analyze: {case}")
-    yield {"dr_heart": dr}
-    nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}\nKeep to 150 words max. Bullet points only.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
-    yield {"dr_heart": dr, "nutri": nu}
-    lo = ask(f"You are Longevity, anti-aging researcher.{ctx}\nKeep to 150 words max. Bullet points only.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
-    yield {"dr_heart": dr, "nutri": nu, "longevity": lo}
-    ho = ask(f"You are Holistics, integrative medicine.{ctx}\nKeep to 150 words max. Bullet points only.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
-    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho}
-    sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations. Keep to 150 words max. Bullet points.{ctx}",
-             f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
-    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy}
-    if supplements and supplements.strip():
-        me = ask("You are Medi/Suppi, pharmacology safety specialist.\nKeep to 150 words max.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'",
+        me = ask("You are Medi/Suppi, pharmacology safety specialist.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'",
                 f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
     else:
         me = "No supplements listed."
@@ -456,37 +348,16 @@ Health Round Table is for educational discussion only. Always consult your docto
                             send_btn = gr.Button("Send")
                             clear_btn = gr.Button("Clear")
                         model_sel = gr.Dropdown(["deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="Model")
-                        def send_message(msg, history, model, _agent=agent):
+                        def send_message(msg, history, model):
                             if not msg or not msg.strip():
                                 return "", history
-                            # Build message list from history (supports ChatMessage objects, dicts, lists)
-                            msgs = []
-                            if history:
-                                for item in history:
-                                    if isinstance(item, (list, tuple)):
-                                        # Gradio v6 list of lists: [[user, assistant], ...]
-                                        msgs.append({"role": "user", "content": str(item[0])})
-                                        if len(item) > 1 and item[1]:
-                                            msgs.append({"role": "assistant", "content": str(item[1])})
-                                    elif isinstance(item, dict):
-                                        role = item.get("role", "user")
-                                        content = item.get("content", "")
-                                        msgs.append({"role": role, "content": str(content)})
-                                    elif hasattr(item, "content"):
-                                        role = getattr(item, "role", "user")
-                                        content = str(item.content)
-                                        msgs.append({"role": role, "content": content})
-                                    else:
-                                        msgs.append({"role": "user", "content": str(item)})
-                            # Append new user message
-                            msgs.append({"role": "user", "content": msg})
                             try:
-                                response = chat(model, _agent["system"], msgs)
+                                response = chat(model, agent["system"], [{"role": "user", "content": m[0]} for m in history] + [{"role": "user", "content": msg}])
                             except Exception as e:
-                                response = f"Error: {str(e)}"
-                            history.append([msg, response])
+                                response = f"⚠️ {str(e)}"
+                            history.append({"role": "user", "content": msg})
+                            history.append({"role": "assistant", "content": response})
                             return "", history
-
                         send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
                         msg.submit(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
                         clear_btn.click(fn=lambda: ("", []), outputs=[msg, chatbot])
