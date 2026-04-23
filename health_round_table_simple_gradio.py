@@ -915,6 +915,8 @@ Health Round Table is for educational discussion only. Always consult your docto
                         model_sel = gr.Dropdown(["deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="Model")
 
                         def send_message(msg, history, model, _agent=agent):
+                            if msg is None:
+                                return "", history
                             if not msg or not msg.strip():
                                 return "", history
                             msgs = []
@@ -938,8 +940,8 @@ Health Round Table is for educational discussion only. Always consult your docto
                             history.append([msg, response])
                             return "", history
 
-                        send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
-                        msg.submit(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
+                        send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot], queue=True)
+                        msg.submit(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot], queue=True)
                         clear_btn.click(fn=lambda: ("", []), outputs=[msg, chatbot])
 
 
