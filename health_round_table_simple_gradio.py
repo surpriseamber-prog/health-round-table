@@ -298,7 +298,7 @@ def feed_html():
 
 
 
-def chat(model, system, messages, timeout=60):
+def chat(model, system, messages, timeout=120):
 
     base = get_base_url(model)
 
@@ -450,40 +450,6 @@ def get_pubmed_query(agent_key, case_text):
 
 
 
-def chat(model, system, messages, timeout=60):
-
-    base = get_base_url(model)
-
-    payload = {"model": model, "messages": [{"role": "system", "content": system}] + messages, "stream": False}
-
-    data = json.dumps(payload).encode()
-
-    if base == LOCAL_URL:
-
-        hdrs = {"Content-Type": "application/json"}
-
-    else:
-
-        hdrs = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-
-    req = urllib.request.Request(f"{base}/api/chat", data=data, headers=hdrs, method="POST")
-
-    try:
-
-        r = urllib.request.urlopen(req, timeout=timeout)
-
-        return json.loads(r.read())["message"]["content"]
-
-    except urllib.error.HTTPError as e:
-
-        raise Exception(f"API Error {e.code}: {e.read()}")
-
-    except urllib.error.URLError as e:
-
-        raise Exception(f"Network Error: {e.reason}")
-
-
-
 def run_debate(case, goals, constraints, model_choice, supplements, guest):
 
     guest_block = f"\n\nOTHER AI PERSPECTIVES:\n{guest}" if guest and guest.strip() else ""
@@ -630,7 +596,7 @@ def chat_agent(agent_key, message, history, model):
 
     try:
 
-        response = chat(model, agent["system"], messages, timeout=90)
+        response = chat(model, agent["system"], messages, timeout=180)
 
     except Exception as e:
 
