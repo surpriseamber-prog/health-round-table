@@ -640,7 +640,7 @@ No waiting rooms. No 3-week specialist waits. No 15-minute rushed appointments.
 
 ### The Specialists
 
-| | |
+| Specialist | Focus |
 
 |---|---|
 
