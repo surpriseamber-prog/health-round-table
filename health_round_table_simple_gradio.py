@@ -922,26 +922,24 @@ Health Round Table is for educational discussion only. Always consult your docto
                             msgs = []
                             if history:
                                 for item in history:
-                                    if isinstance(item, (list, tuple)):
+                                    if isinstance(item, (list, tuple)) and len(item) >= 2:
                                         msgs.append({"role": "user", "content": str(item[0])})
-                                        if len(item) > 1 and item[1]:
-                                            msgs.append({"role": "assistant", "content": str(item[1])})
+                                        msgs.append({"role": "assistant", "content": str(item[1])})
                                     elif isinstance(item, dict):
-                                        msgs.append(item)
+                                        msgs.append({"role": item.get("role", "user"), "content": str(item.get("content", ""))})
                                     elif hasattr(item, "content"):
                                         msgs.append({"role": getattr(item, "role", "user"), "content": str(item.content)})
-                                    else:
-                                        msgs.append({"role": "user", "content": str(item)})
                             msgs.append({"role": "user", "content": msg})
                             try:
                                 response = chat(model, _agent["system"], msgs)
                             except Exception as e:
                                 response = f"Error: {str(e)}"
-                            history.append([msg, response])
-                            return "", history
+                            # Return in Gradio v6 expected format: list of {role, content} dicts
+                            new_history = msgs + [{"role": "assistant", "content": response}]
+                            return "", new_history
 
-                        send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot], queue=True)
-                        msg.submit(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot], queue=True)
+                        send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
+                        msg.submit(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
                         clear_btn.click(fn=lambda: ("", []), outputs=[msg, chatbot])
 
 
