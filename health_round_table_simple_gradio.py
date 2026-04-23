@@ -327,6 +327,7 @@ def chat(model, system, messages, timeout=120):
     try:
 
         r = urllib.request.urlopen(req, timeout=timeout)
+        time.sleep(0.5)  # Rate limit between calls to avoid Ollama Cloud throttling
 
         return json.loads(r.read())["message"]["content"]
 
