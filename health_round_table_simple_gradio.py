@@ -622,7 +622,7 @@ with gr.Blocks(title="Health Round Table") as demo:
 
         with gr.TabItem("About"):
 
-            gr.Markdown(""""## What Is Health Round Table?
+            gr.Markdown("""## What Is Health Round Table?
 
 
 
