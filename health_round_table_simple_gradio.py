@@ -38,7 +38,7 @@ def get_base_url(model=None):
 
     """Route to local if available and running, otherwise cloud."""
 
-    # Render sets PORT env var ΓÇö never attempt local Ollama on server
+    # Render sets PORT env var — never attempt local Ollama on server
 
     if os.environ.get("PORT"):
 
@@ -110,17 +110,17 @@ AVATARS = {
 
 AGENTS = {
 
-    "synthesizer": {"name": "Synthesizer", "emoji": "≡ƒÆí", "system": "You are the Synthesizer, a medical professor. You give exactly 3 numbered, bold recommendations. Always remind patients to consult their doctor."},
+    "synthesizer": {"name": "Synthesizer", "emoji": "💡", "system": "You are the Synthesizer, a medical professor. You give exactly 3 numbered, bold recommendations. Always remind patients to consult their doctor."},
 
-    "dr_heart": {"name": "Dr. Heart", "emoji": "Γ¥ñ∩╕Å", "system": "You are Dr. Heart, a cardiologist. Focus on blood pressure, cholesterol, circulation. Give bullet points."},
+    "dr_heart": {"name": "Dr. Heart", "emoji": "❤️", "system": "You are Dr. Heart, a cardiologist. Focus on blood pressure, cholesterol, circulation. Give bullet points."},
 
-    "nutri": {"name": "Nutri", "emoji": "≡ƒÑæ", "system": "You are Nutri, a functional nutritionist. Build on what the previous specialists said. Give bullet points."},
+    "nutri": {"name": "Nutri", "emoji": "🥑", "system": "You are Nutri, a functional nutritionist. Build on what the previous specialists said. Give bullet points."},
 
-    "longevity": {"name": "Longevity", "emoji": "ΓÅ│", "system": "You are Longevity, an anti-aging researcher. Build on what previous specialists said. Give bullet points."},
+    "longevity": {"name": "Longevity", "emoji": "⏳", "system": "You are Longevity, an anti-aging researcher. Build on what previous specialists said. Give bullet points."},
 
-    "holistics": {"name": "Holistics", "emoji": "≡ƒî┐", "system": "You are Holistics, an integrative medicine specialist. Build on what previous specialists said. Give bullet points."},
+    "holistics": {"name": "Holistics", "emoji": "🌿", "system": "You are Holistics, an integrative medicine specialist. Build on what previous specialists said. Give bullet points."},
 
-    "medi_suppi": {"name": "Medi/Suppi", "emoji": "≡ƒÆè", "system": "You are Medi/Suppi, a pharmacology and supplement safety specialist. Give 3 sections: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE. Always remind: 'Consult your doctor or pharmacist.'"},
+    "medi_suppi": {"name": "Medi/Suppi", "emoji": "💊", "system": "You are Medi/Suppi, a pharmacology and supplement safety specialist. Give 3 sections: 1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE. Always remind: 'Consult your doctor or pharmacist.'"},
 
 }
 
@@ -280,9 +280,9 @@ def feed_html():
 
     if not debates:
 
-        return "<em>No debates yet ΓÇö run a case above!</em>"
+        return "<em>No debates yet — run a case above!</em>"
 
-    html = "<h3>≡ƒôû Recent Debates</h3><table><tr><th>ID</th><th>Case</th><th>Date</th><th>Views</th></tr>"
+    html = "<h3>📖 Recent Debates</h3><table><tr><th>ID</th><th>Case</th><th>Date</th><th>Views</th></tr>"
 
     for did, d in debates:
 
@@ -337,6 +337,222 @@ def chat(model, system, messages, timeout=60):
     except urllib.error.URLError as e:
 
         raise Exception(f"Network Error: {e.reason}")
+
+def fetch_pubmed_research(query, max_results=3):
+
+    """Fetch recent PubMed studies for a given query. Returns formatted research string."""
+
+    try:
+
+        encoded_query = urllib.parse.quote(query)
+
+        search_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={encoded_query}&retmode=json&retmax={max_results}&sort=relevance&reldate=365"
+
+        req = urllib.request.Request(search_url)
+
+        req.add_header("User-Agent", "Mozilla/5.0 (compatible; HealthRoundTable/1.0)")
+
+        with urllib.request.urlopen(req, timeout=15) as response:
+
+            search_result = json.loads(response.read())
+
+        ids = search_result.get("esearchresult", {}).get("idlist", [])
+
+        if not ids:
+
+            return ""
+
+        ids_str = ",".join(ids)
+
+        summary_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={ids_str}&retmode=json"
+
+        req2 = urllib.request.Request(summary_url)
+
+        req2.add_header("User-Agent", "Mozilla/5.0 (compatible; HealthRoundTable/1.0)")
+
+        with urllib.request.urlopen(req2, timeout=15) as response:
+
+            summary_result = json.loads(response.read())
+
+        lines = ["", "[RECENT RESEARCH FROM PUBMED]", "=" * 40]
+
+        result_data = summary_result.get("result", {})
+
+        for uid in ids:
+
+            article = result_data.get(uid, {})
+
+            title = article.get("title", "Unknown title")
+
+            pubdate = article.get("pubdate", "Unknown date")
+
+            source = article.get("source", "Unknown journal")
+
+            authors = article.get("authors", [])
+
+            author_names = [a.get("name", "") for a in authors[:3]]
+
+            author_str = ", ".join([n for n in author_names if n])
+
+            if len(authors) > 3:
+
+                author_str += " et al."
+
+            articleids = article.get("articleids", [])
+
+            doi = ""
+
+            for ai in articleids:
+
+                if ai.get("idtype") == "doi":
+
+                    doi = ai.get("value", "")
+
+                    break
+
+            lines.append(f"\n• {title}")
+
+            lines.append(f"  {author_str} | {pubdate} | {source}")
+
+            if doi:
+
+                lines.append(f"  DOI: https://doi.org/{doi}")
+
+        lines.append("=" * 40)
+
+        return "\n".join(lines)
+
+    except Exception as e:
+
+        return f"\n[PubMed error: {str(e)}]"
+
+
+
+def get_pubmed_query(agent_key, case_text):
+
+    """Map agent to a PubMed search query based on case context."""
+
+    queries = {
+
+        "dr_heart": "blood pressure cardiovascular cholesterol 2025",
+
+        "nutri": "nutrition diet metabolic supplements 2025",
+
+        "longevity": "longevity aging anti-aging biomarkers 2025",
+
+        "holistics": "integrative medicine whole-body approach 2025",
+
+        "medi_suppi": "drug supplement interactions safety 2025",
+
+    }
+
+    return queries.get(agent_key, case_text)
+
+
+
+def chat(model, system, messages, timeout=60):
+
+    base = get_base_url(model)
+
+    payload = {"model": model, "messages": [{"role": "system", "content": system}] + messages, "stream": False}
+
+    data = json.dumps(payload).encode()
+
+    if base == LOCAL_URL:
+
+        hdrs = {"Content-Type": "application/json"}
+
+    else:
+
+        hdrs = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+    req = urllib.request.Request(f"{base}/api/chat", data=data, headers=hdrs, method="POST")
+
+    try:
+
+        r = urllib.request.urlopen(req, timeout=timeout)
+
+        return json.loads(r.read())["message"]["content"]
+
+    except urllib.error.HTTPError as e:
+
+        raise Exception(f"API Error {e.code}: {e.read()}")
+
+    except urllib.error.URLError as e:
+
+        raise Exception(f"Network Error: {e.reason}")
+
+
+
+def run_debate(case, goals, constraints, model_choice, supplements, guest):
+
+    guest_block = f"\n\nOTHER AI PERSPECTIVES:\n{guest}" if guest and guest.strip() else ""
+
+    ctx = (f"\n\nPATIENT GOALS:\n{goals}" if goals else "") + (f"\n\nIMPORTANT CONSTRAINTS:\n{constraints}" if constraints else "") + guest_block
+
+
+
+    def ask(sys, prompt):
+
+        try:
+
+            return chat(model_choice, sys, [{"role": "user", "content": prompt}])
+
+        except Exception as e:
+
+            return f"Error: {e}"
+
+
+
+    dr_research = fetch_pubmed_research(get_pubmed_query("dr_heart", case), max_results=3)
+
+    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}{dr_research}\nBullet points.", f"Analyze: {case}")
+
+    yield {"dr_heart": dr}
+
+    nu_research = fetch_pubmed_research(get_pubmed_query("nutri", case), max_results=3)
+
+    nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}{nu_research}\nBullet points.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
+
+    yield {"dr_heart": dr, "nutri": nu}
+
+    lo_research = fetch_pubmed_research(get_pubmed_query("longevity", case), max_results=3)
+
+    lo = ask(f"You are Longevity, anti-aging researcher.{ctx}{lo_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
+
+    yield {"dr_heart": dr, "nutri": nu, "longevity": lo}
+
+    ho_research = fetch_pubmed_research(get_pubmed_query("holistics", case), max_results=3)
+
+    ho = ask(f"You are Holistics, integrative medicine.{ctx}{ho_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
+
+    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho}
+
+    sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations.{ctx}",
+
+            f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
+
+    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy}
+
+    if supplements and supplements.strip():
+
+        me_research = fetch_pubmed_research(get_pubmed_query("medi_suppi", case), max_results=3)
+
+        me = ask("You are Medi/Suppi, pharmacology safety specialist.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'{me_research}",
+
+                f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
+
+    else:
+
+        me = "No supplements listed."
+
+    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy, "medi_suppi": me}
+
+    results = {"synthesizer": sy, "dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "medi_suppi": me}
+
+    did = save_debate(case, goals, constraints, model_choice, supplements, results)
+
+    return results, did, f"https://health-round-table.com/?id={did}"
 
 
 
@@ -418,7 +634,7 @@ def chat_agent(agent_key, message, history, model):
 
     except Exception as e:
 
-        response = f"ΓÜá∩╕Å {str(e)}"
+        response = f"⚠️ {str(e)}"
 
     history.append((message, response))
 
@@ -432,7 +648,7 @@ init_db()
 
 with gr.Blocks(title="Health Round Table") as demo:
 
-    gr.Markdown("# Health Round Table\n*Not medical advice ΓÇö for educational debate only*")
+    gr.Markdown("# Health Round Table\n*Not medical advice — for educational debate only*")
 
 
 
@@ -444,7 +660,7 @@ with gr.Blocks(title="Health Round Table") as demo:
 
 
 
-**Get multiple medical perspectives in minutes ΓÇö without an appointment.**
+**Get multiple medical perspectives in minutes — without an appointment.**
 
 
 
@@ -462,29 +678,29 @@ No waiting rooms. No 3-week specialist waits. No 15-minute rushed appointments.
 
 |---|---|
 
-| **Cardiology** Γ¥ñ∩╕Å | Blood pressure, cholesterol, circulation |
+| **Cardiology** ❤️ | Blood pressure, cholesterol, circulation |
 
-| **Nutrition** ≡ƒÑæ | Food, supplements, gut health |
+| **Nutrition** 🥑 | Food, supplements, gut health |
 
-| **Longevity** ΓÅ│ | Anti-aging science, biomarkers |
+| **Longevity** ⏳ | Anti-aging science, biomarkers |
 
-| **Integrative Medicine** ≡ƒî┐ | Whole-body, mind-body approaches |
+| **Integrative Medicine** 🌿 | Whole-body, mind-body approaches |
 
-| **Drug + Supplement Safety** ≡ƒÆè | Interactions, contraindications |
+| **Drug + Supplement Safety** 💊 | Interactions, contraindications |
 
-| **Synthesizer** ≡ƒÆí | Pulls it all together into 3 recommendations |
+| **Synthesizer** 💡 | Pulls it all together into 3 recommendations |
 
 
 
 ### How It Works
 
-1. **Submit your case** ΓÇö age, sex, weight, symptoms, current medications
+1. **Submit your case** — age, sex, weight, symptoms, current medications
 
-2. **Each specialist reads what the others said** ΓÇö they build on each other, challenge assumptions, fill gaps
+2. **Each specialist reads what the others said** — they build on each other, challenge assumptions, fill gaps
 
 3. **Medi/Suppi reviews your supplements** for conflicts or concerns
 
-4. **Synthesizer delivers 3 clear recommendations** ΓÇö ranked by priority
+4. **Synthesizer delivers 3 clear recommendations** — ranked by priority
 
 
 
@@ -500,7 +716,7 @@ No waiting rooms. No 3-week specialist waits. No 15-minute rushed appointments.
 
 
 
-### Not Medical Advice ΓÜá∩╕Å
+### Not Medical Advice ⚠️
 
 Health Round Table is for educational discussion only. Always consult your doctor before making health decisions.
 
@@ -532,47 +748,47 @@ Health Round Table is for educational discussion only. Always consult your docto
 
 
 
-            with gr.Accordion("TLDR ΓÇö Key Recommendations", open=True):
+            with gr.Accordion("TLDR — Key Recommendations", open=True):
 
                 tldr_output = gr.Markdown("*Results appear here*")
 
 
 
-            with gr.Accordion("Γ¥ñ∩╕Å Dr. Heart", open=False):
+            with gr.Accordion("❤️ Dr. Heart", open=False):
 
-                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("dr_heart") + '<b>Dr. Heart</b> ΓÇö Cardiology</div>')
+                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("dr_heart") + '<b>Dr. Heart</b> — Cardiology</div>')
 
                 dr_out = gr.Markdown("*Waiting*")
 
 
 
-            with gr.Accordion("≡ƒÑæ Nutri", open=False):
+            with gr.Accordion("🥑 Nutri", open=False):
 
-                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("nutri") + '<b>Nutri</b> ΓÇö Functional Nutrition</div>')
+                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("nutri") + '<b>Nutri</b> — Functional Nutrition</div>')
 
                 nu_out = gr.Markdown("*Waiting*")
 
 
 
-            with gr.Accordion("ΓÅ│ Longevity", open=False):
+            with gr.Accordion("⏳ Longevity", open=False):
 
-                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("longevity") + '<b>Longevity</b> ΓÇö Anti-Aging Research</div>')
+                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("longevity") + '<b>Longevity</b> — Anti-Aging Research</div>')
 
                 lo_out = gr.Markdown("*Waiting*")
 
 
 
-            with gr.Accordion("≡ƒî┐ Holistics", open=False):
+            with gr.Accordion("🌿 Holistics", open=False):
 
-                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("holistics") + '<b>Holistics</b> ΓÇö Integrative Medicine</div>')
+                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("holistics") + '<b>Holistics</b> — Integrative Medicine</div>')
 
                 ho_out = gr.Markdown("*Waiting*")
 
 
 
-            with gr.Accordion("≡ƒÆè Medi/Suppi", open=False):
+            with gr.Accordion("💊 Medi/Suppi", open=False):
 
-                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("medi_suppi") + '<b>Medi/Suppi</b> ΓÇö Drug + Supplement Safety</div>')
+                gr.HTML('<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' + avatar_img("medi_suppi") + '<b>Medi/Suppi</b> — Drug + Supplement Safety</div>')
 
                 me_out = gr.Markdown("*Waiting*")
 
@@ -604,7 +820,7 @@ Health Round Table is for educational discussion only. Always consult your docto
 
             def on_start(case, goals, constraints, model, supplements, guest):
 
-                yield ["*Working...*"] * 6 + ["", "ΓÅ│ Dr. Heart analyzing...", feed_html()]
+                yield ["*Working...*"] * 6 + ["", "⏳ Dr. Heart analyzing...", feed_html()]
 
                 for partial in run_debate(case, goals, constraints, model, supplements, guest):
 
@@ -622,7 +838,7 @@ Health Round Table is for educational discussion only. Always consult your docto
 
                     cnt = sum(1 for x in [nu, lo, ho, sy, me] if x not in ("*Waiting*", "*Working...*"))
 
-                    loading = f"ΓÅ│ Running specialists... ({cnt+1}/6)"
+                    loading = f"⏳ Running specialists... ({cnt+1}/6)"
 
                     yield [sy, dr, nu, lo, ho, me, "", loading, feed_html()]
 
@@ -646,7 +862,7 @@ Health Round Table is for educational discussion only. Always consult your docto
 
                 if not d:
 
-                    return ["ΓÜá∩╕Å Not found.", "", "", "", "", "", "", "", feed_html()]
+                    return ["⚠️ Not found.", "", "", "", "", "", "", "", feed_html()]
 
                 inc_views(did)
 
@@ -701,7 +917,6 @@ Health Round Table is for educational discussion only. Always consult your docto
                         def send_message(msg, history, model, _agent=agent):
                             if not msg or not msg.strip():
                                 return "", history
-                            # Build message list from history
                             msgs = []
                             if history:
                                 for item in history:
@@ -710,13 +925,9 @@ Health Round Table is for educational discussion only. Always consult your docto
                                         if len(item) > 1 and item[1]:
                                             msgs.append({"role": "assistant", "content": str(item[1])})
                                     elif isinstance(item, dict):
-                                        role = item.get("role", "user")
-                                        content = item.get("content", "")
-                                        msgs.append({"role": role, "content": str(content)})
+                                        msgs.append(item)
                                     elif hasattr(item, "content"):
-                                        role = getattr(item, "role", "user")
-                                        content = str(item.content)
-                                        msgs.append({"role": role, "content": content})
+                                        msgs.append({"role": getattr(item, "role", "user"), "content": str(item.content)})
                                     else:
                                         msgs.append({"role": "user", "content": str(item)})
                             msgs.append({"role": "user", "content": msg})
