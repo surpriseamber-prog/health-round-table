@@ -22,7 +22,7 @@ API_KEY = os.environ.get("OLLAMA_API_KEY", "")
 
 LOCAL_URL = "http://localhost:11434"
 
-CLOUD_URL = "https://api.ollama.com"
+CLOUD_URL = "https://ollama.com"
 
 
 
