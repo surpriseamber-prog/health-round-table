@@ -938,8 +938,8 @@ Health Round Table is for educational discussion only. Always consult your docto
                             history.append([msg, response])
                             return "", history
 
+                        send_btn.click(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
                         msg.submit(fn=send_message, inputs=[msg, chatbot, model_sel], outputs=[msg, chatbot])
-
                         clear_btn.click(fn=lambda: ("", []), outputs=[msg, chatbot])
 
 
