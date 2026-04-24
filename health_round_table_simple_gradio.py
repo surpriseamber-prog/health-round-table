@@ -25,13 +25,13 @@ LOCAL_URL = "http://localhost:11434"
 
 CLOUD_URL = "https://ollama.com"
 
-
+OPENROUTER_URL = "https://openrouter.ai/api/v1"
 
 # Local models known to be installed
 
 LOCAL_MODELS = {"qwen2.5:7b"}
 
-CLOUD_MODELS = {}  # Ollama Cloud models (currently disabled due to throttling)
+CLOUD_MODELS = {"deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"}
 
 
 
@@ -85,8 +85,7 @@ if not API_KEY:
 
     raise ValueError("OLLAMA_API_KEY environment variable is not set")
 
-OLLAMA_HEADERS = {"Authorization": f"Bearer {OLLAMA_API_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (compatible; HealthRoundTable/1.0)"}
-OPENROUTER_HEADERS = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json", "HTTP-Referer": "https://health-round-table.com", "X-Title": "Health Round Table"}
+headers = {"Authorization": f"Bearer {OLLAMA_API_KEY}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0 (compatible; HealthRoundTable/1.0)"}
 
 
 
@@ -300,7 +299,7 @@ def feed_html():
 
 
 
-def ollama_chat(model, system, messages, timeout=120):
+def chat(model, system, messages, timeout=120):
 
     base = get_base_url(model)
 
@@ -316,7 +315,7 @@ def ollama_chat(model, system, messages, timeout=120):
 
         headers = {
 
-            "Authorization": f"Bearer {API_KEY}",
+            "Authorization": f"Bearer {OLLAMA_API_KEY}",
 
             "Content-Type": "application/json",
 
@@ -329,7 +328,7 @@ def ollama_chat(model, system, messages, timeout=120):
     try:
 
         r = urllib.request.urlopen(req, timeout=timeout)
-        time.sleep(0.3)  # Rate limit between calls to avoid Ollama Cloud throttling
+        time.sleep(0.5)  # Rate limit between calls to avoid Ollama Cloud throttling
 
         return json.loads(r.read())["message"]["content"]
 
@@ -340,6 +339,33 @@ def ollama_chat(model, system, messages, timeout=120):
     except urllib.error.URLError as e:
 
         raise Exception(f"Network Error: {e.reason}")
+
+def openrouter_chat(model, system, messages, timeout=120):
+    """Call OpenRouter API."""
+    url = f"{OPENROUTER_URL}/chat/completions"
+    payload = {
+        "model": model,
+        "messages": [{"role": "system", "content": system}] + messages,
+        "stream": False
+    }
+    data = json.dumps(payload).encode()
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://health-round-table.com",
+        "X-Title": "Health Round Table"
+    }
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        r = urllib.request.urlopen(req, timeout=timeout)
+        time.sleep(0.3)
+        resp = json.loads(r.read())
+        return resp["choices"][0]["message"]["content"]
+    except urllib.error.HTTPError as e:
+        raise Exception(f"OpenRouter Error {e.code}: {e.read()}")
+    except urllib.error.URLError as e:
+        raise Exception(f"Network Error: {e.reason}")
+
 
 def fetch_pubmed_research(query, max_results=3):
 
@@ -599,10 +625,7 @@ def chat_agent(agent_key, message, history, model):
 
     try:
 
-        if agent.get("api") == "openrouter":
-            response = openrouter_chat(model, agent["system"], messages, timeout=180)
-        else:
-            response = ollama_chat(model, agent["system"], messages, timeout=180)
+        response = openrouter_chat(model, agent["system"], messages, timeout=180)
 
     except Exception as e:
 
@@ -684,15 +707,7 @@ with gr.Blocks(title="Health Round Table") as demo:
 
                     supplements_input = gr.Textbox(label="Supplements / Medications", placeholder="e.g. magnesium 400mg, fish oil...", lines=3)
 
-                    model_choice = gr.Dropdown([
-    "deepseek/deepseek-chat-v3",
-    "deepseek/deepseek-r1",
-    "google/gemini-2.0-flash",
-    "anthropic/claude-3.5-haiku",
-    "openai/gpt-4o-mini",
-    "qwen/qwen-2.5-72b-instruct",
-    "mistral/mistral-small-3.1",
-], value="deepseek/deepseek-chat-v3", label="AI Model")
+                    model_choice = gr.Dropdown(["qwen2.5:7b", "deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="AI Model")
 
                     start_btn = gr.Button("Start Round Table", variant="primary")
 
