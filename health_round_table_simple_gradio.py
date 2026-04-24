@@ -18,11 +18,13 @@ from datetime import datetime
 
 
 
-API_KEY = os.environ.get("OLLAMA_API_KEY", "")
+OLLAMA_API_KEY = os.environ.get("OLLAMA_API_KEY", "")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 
 LOCAL_URL = "http://localhost:11434"
 
-CLOUD_URL = "https://api.ollama.com"
+CLOUD_URL = "https://ollama.com"
+OPENROUTER_URL = "https://openrouter.ai/api/v1"
 
 
 
