@@ -18,14 +18,13 @@ from datetime import datetime
 
 
 
-OLLAMA_API_KEY = os.environ.get("OLLAMA_API_KEY", "")
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+API_KEY = os.environ.get("OLLAMA_API_KEY", "")
 
 LOCAL_URL = "http://localhost:11434"
 
-CLOUD_URL = "https://ollama.com"
+CLOUD_URL = "https://api.ollama.com"
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1"
+
 
 # Local models known to be installed
 
@@ -328,7 +327,6 @@ def chat(model, system, messages, timeout=120):
     try:
 
         r = urllib.request.urlopen(req, timeout=timeout)
-        time.sleep(0.5)  # Rate limit between calls to avoid Ollama Cloud throttling
 
         return json.loads(r.read())["message"]["content"]
 
@@ -651,43 +649,28 @@ with gr.Blocks(title="Health Round Table") as demo:
 
         with gr.TabItem("About"):
 
-            gr.Markdown("""## What Is Health Round Table?
-
-                        **Get multiple medical perspectives in minutes - without an appointment.**
-
-                        6 specialists review your health case together, each reading what the others said, building toward agreed recommendations. One after another, they flag concerns, cross-check your supplements, and synthesize their findings into clear guidance.
-
-                        No waiting rooms. No 3-week specialist waits. No 15-minute rushed appointments.
-
-                        ## The Specialists
-
-                        - **Cardiology** - Blood pressure, cholesterol, circulation
-                        - **Nutrition** - Food, supplements, gut health
-                        - **Longevity** - Anti-aging science, biomarkers
-                        - **Integrative Medicine** - Whole-body, mind-body approaches
-                        - **Drug + Supplement Safety** - Interactions, contraindications
-                        - **Synthesizer** - Pulls it all together into 3 recommendations
-
-                        ## How It Works
-
-                        1. **Submit your case** - age, sex, weight, symptoms, current medications
-                        2. **Each specialist reads what the others said** - they build on each other
-                        3. **Medi/Suppi reviews your supplements** for conflicts or concerns
-                        4. **Synthesizer delivers 3 clear recommendations** - ranked by priority
-
-                        ## Who It Is For
-
-                        - Anyone managing complex or overlapping health concerns
-                        - People seeking a second opinion before making big decisions
-                        - Those tired of 3-week waits for 15 minutes with a specialist
-                        - Anyone who wants to walk into their doctor's office better prepared
-
-                        ## Warning: Not Medical Advice
-
-                        Health Round Table is for educational discussion only. Always consult your doctor before making health decisions.
-""")
-
-
+            gr.HTML(
+                "<div style=\"background:#1a1a2e;padding:24px;border-radius:12px;font-family:system-ui,sans-serif;\">"
+                "<p style=\"color:#ccc;font-size:14px;margin-top:0;\">No waiting rooms. No 3-week specialist waits. No 15-minute rushed appointments.</p>"
+                ""
+                "<h3 style=\"color:#fff;border-bottom:1px solid #444;padding-bottom:8px;margin-top:20px;\">The Specialists</h3>"
+                "<table style=\"width:100%;border-collapse:collapse;color:#fff;\">"
+                "<tr><td style=\"padding:8px 0;border-bottom:1px solid #333;\"><strong>Cardiology</strong></td><td style=\"padding:8px 0;border-bottom:1px solid #333;color:#ccc;\">Blood pressure, cholesterol, circulation</td></tr>"
+                "<tr><td style=\"padding:8px 0;border-bottom:1px solid #333;\"><strong>Nutrition</strong></td><td style=\"padding:8px 0;border-bottom:1px solid #333;color:#ccc;\">Food, supplements, gut health</td></tr>"
+                "<tr><td style=\"padding:8px 0;border-bottom:1px solid #333;\"><strong>Longevity</strong></td><td style=\"padding:8px 0;border-bottom:1px solid #333;color:#ccc;\">Anti-aging science, biomarkers</td></tr>"
+                "<tr><td style=\"padding:8px 0;border-bottom:1px solid #333;\"><strong>Integrative Medicine</strong></td><td style=\"padding:8px 0;border-bottom:1px solid #333;color:#ccc;\">Whole-body, mind-body approaches</td></tr>"
+                "<tr><td style=\"padding:8px 0;border-bottom:1px solid #333;\"><strong>Drug + Supplement Safety</strong></td><td style=\"padding:8px 0;border-bottom:1px solid #333;color:#ccc;\">Interactions, contraindications</td></tr>"
+                "<tr><td style=\"padding:8px 0;\"><strong>Synthesizer</strong></td><td style=\"padding:8px 0;color:#ccc;\">Pulls all findings together into 3 clear recommendations</td></tr>"
+                "</table>"
+                ""
+                "<h3 style=\"color:#fff;border-bottom:1px solid #444;padding-bottom:8px;margin-top:20px;\">How It Works</h3>"
+                "<ol style=\"color:#ccc;line-height:1.8;font-size:14px;padding-left:20px;margin-bottom:0;\">"
+                "<li><strong>Submit your case</strong> - age, sex, weight, symptoms, current medications</li>"
+                "<li><strong>Collaborative Review</strong> - specialists read each others notes, building on findings</li>"
+                "<li><strong>Synthesizer</strong> - delivers 3 clear recommendations, ranked by priority</li>"
+                "</ol>"
+                "</div>"
+            )
 
         with gr.TabItem("Group Debate"):
 
