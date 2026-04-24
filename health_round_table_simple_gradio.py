@@ -81,7 +81,7 @@ BASE_URL = CLOUD_URL  # default; overridden at runtime
 
 
 
-if not API_KEY:
+if not OLLAMA_API_KEY:
 
     raise ValueError("OLLAMA_API_KEY environment variable is not set")
 
