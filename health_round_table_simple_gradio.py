@@ -35,6 +35,8 @@ LOCAL_MODELS = {"qwen2.5:7b"}
 CLOUD_MODELS = {"deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"}
 
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 
 def get_base_url(model=None):
 
@@ -479,136 +481,107 @@ def get_pubmed_query(agent_key, case_text):
 
 
 
+
+
 def run_debate(case, goals, constraints, model_choice, supplements, guest):
-
+    """Sequential debate — each specialist reads previous analyses."""
     guest_block = f"\n\nOTHER AI PERSPECTIVES:\n{guest}" if guest and guest.strip() else ""
-
     ctx = (f"\n\nPATIENT GOALS:\n{goals}" if goals else "") + (f"\n\nIMPORTANT CONSTRAINTS:\n{constraints}" if constraints else "") + guest_block
 
-
-
     def ask(sys, prompt):
-
         try:
-
-            return chat(model_choice, sys, [{"role": "user", "content": prompt}])
-
+            return openrouter_chat(model_choice, sys, [{"role": "user", "content": prompt}])
         except Exception as e:
-
             return f"Error: {e}"
 
-
-
     dr_research = fetch_pubmed_research(get_pubmed_query("dr_heart", case), max_results=3)
-
     dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}{dr_research}\nBullet points.", f"Analyze: {case}")
-
     yield {"dr_heart": dr}
 
     nu_research = fetch_pubmed_research(get_pubmed_query("nutri", case), max_results=3)
-
     nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}{nu_research}\nBullet points.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
-
     yield {"dr_heart": dr, "nutri": nu}
 
     lo_research = fetch_pubmed_research(get_pubmed_query("longevity", case), max_results=3)
-
     lo = ask(f"You are Longevity, anti-aging researcher.{ctx}{lo_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
-
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo}
 
     ho_research = fetch_pubmed_research(get_pubmed_query("holistics", case), max_results=3)
-
     ho = ask(f"You are Holistics, integrative medicine.{ctx}{ho_research}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
-
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho}
 
     sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations.{ctx}",
-
             f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
-
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy}
 
     if supplements and supplements.strip():
-
         me_research = fetch_pubmed_research(get_pubmed_query("medi_suppi", case), max_results=3)
-
         me = ask("You are Medi/Suppi, pharmacology safety specialist.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'{me_research}",
-
                 f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
-
     else:
-
         me = "No supplements listed."
-
     yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy, "medi_suppi": me}
 
     results = {"synthesizer": sy, "dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "medi_suppi": me}
-
     did = save_debate(case, goals, constraints, model_choice, supplements, results)
-
     return results, did, f"https://health-round-table.com/?id={did}"
 
 
-
-def run_debate(case, goals, constraints, model_choice, supplements, guest):
+def run_panel(case, goals, constraints, model_choice, supplements, guest):
+    """Parallel independent panel — all specialists analyze SIMULTANEOUSLY.
+    Each specialist ONLY reads the original case (no building on each other).
+    0.2s stagger between launches to avoid API rate limits."""
+    import time
 
     guest_block = f"\n\nOTHER AI PERSPECTIVES:\n{guest}" if guest and guest.strip() else ""
-
     ctx = (f"\n\nPATIENT GOALS:\n{goals}" if goals else "") + (f"\n\nIMPORTANT CONSTRAINTS:\n{constraints}" if constraints else "") + guest_block
 
+    specialist_tasks = [
+        ("dr_heart", f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}",
+         f"Analyze from a cardiology perspective. Bullet points:\n{case}"),
+        ("nutri", f"You are Nutri, functional nutritionist.{ctx}",
+         f"Analyze from a nutrition and metabolic perspective. Bullet points:\n{case}"),
+        ("longevity", f"You are Longevity, anti-aging researcher.{ctx}",
+         f"Analyze from an anti-aging and longevity perspective. Bullet points:\n{case}"),
+        ("holistics", f"You are Holistics, integrative medicine.{ctx}",
+         f"Analyze from a whole-body integrative medicine perspective. Bullet points:\n{case}"),
+    ]
 
-
-    def ask(sys, prompt):
-
+    def ask_specialist(sys, prompt):
         try:
-
-            return chat(model_choice, sys, [{"role": "user", "content": prompt}])
-
+            return openrouter_chat(model_choice, sys, [{"role": "user", "content": prompt}], timeout=180)
         except Exception as e:
-
             return f"Error: {e}"
 
-
-
-    dr = ask(f"You are Dr. Heart, cardiologist. Focus on BP, cholesterol, circulation.{ctx}\nBullet points.", f"Analyze: {case}")
-
-    yield {"dr_heart": dr}
-
-    nu = ask(f"You are Nutri, functional nutritionist. Build on Dr. Heart's foundation.{ctx}\nBullet points.", f"React:\n=== DR. HEART ===\n{dr}\nCase: {case}")
-
-    yield {"dr_heart": dr, "nutri": nu}
-
-    lo = ask(f"You are Longevity, anti-aging researcher.{ctx}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\nCase: {case}")
-
-    yield {"dr_heart": dr, "nutri": nu, "longevity": lo}
-
-    ho = ask(f"You are Holistics, integrative medicine.{ctx}\nBullet points.", f"Build:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\nCase: {case}")
-
-    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho}
-
-    sy = ask(f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations.{ctx}",
-
-            f"Consensus:\n=== DR. HEART ===\n{dr}\n=== NUTRI ===\n{nu}\n=== LONGEVITY ===\n{lo}\n=== HOLISTICS ===\n{ho}")
-
-    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy}
+    results = {}
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {}
+        for i, (key, sys, prompt) in enumerate(specialist_tasks):
+            if i > 0:
+                time.sleep(0.2)
+            futures[executor.submit(ask_specialist, sys, prompt)] = key
+        for future in as_completed(futures):
+            key = futures[future]
+            results[key] = future.result()
+            yield dict(results)
 
     if supplements and supplements.strip():
-
-        me = ask("You are Medi/Suppi, pharmacology safety specialist.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'",
-
-                f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
-
+        me = ask_specialist(
+            "You are Medi/Suppi, pharmacology safety specialist.\n1. CONCERNS 2. WATCH LIST 3. GENERAL GUIDANCE\n'Always consult your doctor or pharmacist.'",
+            f"Supplements: {supplements}\nCase: {case}\nGoals: {goals}\nConstraints: {constraints}")
     else:
-
         me = "No supplements listed."
+    results["medi_suppi"] = me
+    yield dict(results)
 
-    yield {"dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "synthesizer": sy, "medi_suppi": me}
-
-    results = {"synthesizer": sy, "dr_heart": dr, "nutri": nu, "longevity": lo, "holistics": ho, "medi_suppi": me}
+    all_analyses = "\n\n".join([f"=== {k.upper()} ===\n{results.get(k, '')}" for k in ["dr_heart", "nutri", "longevity", "holistics"]])
+    sy = ask_specialist(
+        f"You are the Synthesizer, medical professor. Give exactly 3 numbered recommendations.{ctx}",
+        f"Based on these INDEPENDENT specialist analyses:\n{all_analyses}\n\nProvide 3 clear numbered recommendations, ranked by priority.")
+    results["synthesizer"] = sy
+    yield dict(results)
 
     did = save_debate(case, goals, constraints, model_choice, supplements, results)
-
     return results, did, f"https://health-round-table.com/?id={did}"
 
 
@@ -709,6 +682,7 @@ with gr.Blocks(title="Health Round Table") as demo:
 
                     model_choice = gr.Dropdown(["qwen2.5:7b", "deepseek-v3.2", "qwen3-vl:235b-instruct", "gemma3:27b", "minimax-m2.7"], value="deepseek-v3.2", label="AI Model")
 
+                    mode_choice = gr.Radio(["Independent Panel", "Sequential Debate"], value="Independent Panel", label="Analysis Mode", info="Independent Panel: all specialists analyze simultaneously (faster). Sequential: each specialist reads previous analyses.")
                     start_btn = gr.Button("Start Round Table", variant="primary")
 
 
@@ -783,11 +757,11 @@ with gr.Blocks(title="Health Round Table") as demo:
 
 
 
-            def on_start(case, goals, constraints, model, supplements, guest):
+            def on_start(case, goals, constraints, model, supplements, guest, mode):
 
-                yield ["*Working...*"] * 6 + ["", "⏳ Dr. Heart analyzing...", feed_html()]
+                yield ["*Working...*"] * 6 + ["", "Working...", feed_html()]
 
-                for partial in run_debate(case, goals, constraints, model, supplements, guest):
+                for partial in (run_panel if mode == "Independent Panel" else run_debate)(case, goals, constraints, model, supplements, guest):
 
                     dr = partial.get("dr_heart", "*Waiting*")
 
@@ -843,7 +817,7 @@ with gr.Blocks(title="Health Round Table") as demo:
 
                 fn=on_start,
 
-                inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input, guest_input],
+                inputs=[case_input, goals_input, constraints_input, model_choice, supplements_input, guest_input, mode_choice],
 
                 outputs=[tldr_output, dr_out, nu_out, lo_out, ho_out, me_out, did_info, gr.HTML(), feed_out]
 
@@ -896,7 +870,7 @@ with gr.Blocks(title="Health Round Table") as demo:
                                         msgs.append({"role": getattr(item, "role", "user"), "content": str(item.content)})
                             msgs.append({"role": "user", "content": msg})
                             try:
-                                response = chat(model, _agent["system"], msgs)
+                                response = openrouter_chat(model, _agent["system"], msgs)
                             except Exception as e:
                                 response = f"Error: {str(e)}"
                             # Return in Gradio v6 expected format: list of {role, content} dicts
