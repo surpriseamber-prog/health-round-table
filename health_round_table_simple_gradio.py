@@ -870,7 +870,7 @@ with gr.Blocks(title="Health Round Table") as demo:
                                         msgs.append({"role": getattr(item, "role", "user"), "content": str(item.content)})
                             msgs.append({"role": "user", "content": msg})
                             try:
-                                response = openrouter_chat(model, _agent["system"], msgs)
+                                response = chat(model, _agent["system"], msgs)
                             except Exception as e:
                                 response = f"Error: {str(e)}"
                             # Return in Gradio v6 expected format: list of {role, content} dicts
